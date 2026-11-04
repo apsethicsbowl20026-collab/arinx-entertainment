@@ -1,0 +1,35 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const built = await build({entryPoints:['functions/api/[[path]].js'],bundle:true,platform:'neutral',format:'esm',write:false});
+const {onRequest}=await import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`);
+const call=(path,options={},env={})=>onRequest({request:new Request('https://example.com/api/'+path,options),env});
+test('returns a helpful response when D1 is not bound',async()=>{const r=await call('auth');assert.equal(r.status,503);assert.match((await r.json()).error,/database/i)});
+test('rejects cross-origin mutations before touching the database',async()=>{const r=await call('auth',{method:'POST',headers:{Origin:'https://evil.example'},body:'{}'});assert.equal(r.status,403)});
+test('returns a signed-out session without a cookie',async()=>{const r=await call('auth',{}, {DB:{}});assert.deepEqual(await r.json(),{user:null})});
+test('returns 404 for unknown API paths',async()=>{const r=await call('unknown',{}, {DB:{}});assert.equal(r.status,404)});
+
+test('account, social and upload flows work with D1 and R2 bindings', async()=>{
+  const {DatabaseSync}=await import('node:sqlite');
+  const {readFileSync}=await import('node:fs');
+  const sql=new DatabaseSync(':memory:'); sql.exec(readFileSync('migrations/0001_initial.sql','utf8'));
+  const DB={prepare(query){const bound=(values=[])=>({async first(){return sql.prepare(query).get(...values) || null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){sql.prepare(query).run(...values);return {success:true}}});return {...bound(),bind(...values){return bound(values)}}}};
+  const objects=new Map();
+  const MEDIA={async put(key,body){objects.set(key,body)},async get(key){const data=objects.get(key);return data?{body:data,size:data.byteLength}:null},async delete(key){objects.delete(key)}};
+  const env={DB,MEDIA};
+  const request=(path,body,cookie)=>call(path,{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(body)},env);
+  let r=await request('auth',{action:'register',name:'Test Creator',email:'test@example.com',password:'a-strong-password'});
+  assert.equal(r.status,201);const session=r.headers.get('set-cookie').split(';')[0];assert.equal((await r.json()).user.name,'Test Creator');
+  r=await call('auth',{headers:{Cookie:session}},env);assert.equal((await r.json()).user.name,'Test Creator');
+  r=await request('videos/commons-0/likes',{},session);assert.equal(r.status,200);
+  r=await call('videos/commons-0/likes',{headers:{Cookie:session}},env);assert.deepEqual(await r.json(),{count:1,liked:true});
+  r=await request('videos/commons-0/comments',{body:'Great video'},session);assert.equal(r.status,200);
+  r=await call('videos/commons-0/comments',{},env);assert.equal((await r.json()).comments[0].body,'Great video');
+  const form=new FormData();form.append('file',new File([new Uint8Array([1,2,3])],'test.mp4',{type:'video/mp4'}));form.append('title','My first video');form.append('category','Education');
+  r=await call('upload',{method:'POST',headers:{Origin:'https://example.com',Cookie:session},body:form},env);assert.equal(r.status,201);const {id}=await r.json();
+  r=await call('videos',{},env);assert.equal((await r.json()).videos[0].title,'My first video');
+  r=await call(`media/${id}`,{},env);assert.deepEqual([...new Uint8Array(await r.arrayBuffer())],[1,2,3]);
+  r=await request('auth',{action:'logout'},session);assert.equal(r.status,200);
+  r=await call('auth',{headers:{Cookie:session}},env);assert.equal((await r.json()).user,null);
+  sql.close();
+});
