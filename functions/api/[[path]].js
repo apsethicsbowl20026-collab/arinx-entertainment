@@ -31,7 +31,17 @@ export async function onRequest({request:req, env}) {
     if (!origin || origin !== url.origin) return fail('Invalid request origin', 403);
   }
   const db = env.DB;
-  if (!db) return fail('The platform database is not configured. See the deployment guide.', 503);
+  if (path === 'health' && (method === 'GET' || method === 'HEAD')) {
+    const health = {ok: true, bindings: {db: !!db, media: !!env.MEDIA}, database: db ? 'ok' : 'not-configured'};
+    if (db) {
+      try { await db.prepare('SELECT 1 AS ok').first(); }
+      catch (error) { console.error('Health check query failed', error); health.ok = false; health.database = 'error'; }
+    } else {
+      health.ok = false;
+    }
+    return json(health, health.ok ? 200 : 503);
+  }
+  if (!db) return fail('The platform database is not configured. In the Cloudflare dashboard, add a D1 database binding named "DB" (Workers & Pages → your project → Settings → Bindings), then redeploy the project so the binding takes effect. See /api/health.', 503);
   try {
     const user = await currentUser(req, db);
     if (path === 'auth' && method === 'GET') return json({user:publicUser(user)});
@@ -63,7 +73,7 @@ export async function onRequest({request:req, env}) {
       return json({videos:results.results.map(v=>({...v,url:`/api/media/${v.id}`,thumb:'', license:'Uploaded by creator'}))});
     }
     if (path.startsWith('media/') && method === 'GET') {
-      if (!env.MEDIA) return fail('Media storage is not configured.', 503);
+      if (!env.MEDIA) return fail('Media storage is not configured. Bind an R2 bucket named "MEDIA" in Settings → Bindings, then redeploy the project. See /api/health.', 503);
       const id = path.slice(6);
       const v = await db.prepare('SELECT object_key, content_type FROM videos WHERE id=?').bind(id).first();
       if (!v) return fail('Video not found.',404);
@@ -79,7 +89,7 @@ export async function onRequest({request:req, env}) {
     }
     if (path === 'upload' && method === 'POST') {
       if (!user) return fail('Sign in to upload.',401);
-      if (!env.MEDIA) return fail('Media storage is not configured.',503);
+      if (!env.MEDIA) return fail('Media storage is not configured. Bind an R2 bucket named "MEDIA" in Settings → Bindings, then redeploy the project. See /api/health.',503);
       if (Number(req.headers.get('Content-Length') || 0) > 55*1024*1024) return fail('Videos must be 50 MB or smaller.',413);
       const form = await req.formData(), file = form.get('file'), title = String(form.get('title') || '').trim(), description = String(form.get('description') || '').trim(), category = String(form.get('category') || 'Entertainment');
       if (!(file instanceof File) || !['video/mp4','video/webm','video/quicktime'].includes(file.type) || file.size === 0 || file.size > 50*1024*1024 || !title || title.length > 120 || description.length > 5000 || !['Entertainment','Animation','Movies','Science','Gaming','Music','Sports','Education','Technology'].includes(category)) return fail('Provide a title and an MP4, WebM or MOV video up to 50 MB.');

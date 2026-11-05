@@ -7,6 +7,9 @@ const call=(path,options={},env={})=>onRequest({request:new Request('https://exa
 test('returns a helpful response when D1 is not bound',async()=>{const r=await call('auth');assert.equal(r.status,503);assert.match((await r.json()).error,/database/i)});
 test('rejects cross-origin mutations before touching the database',async()=>{const r=await call('auth',{method:'POST',headers:{Origin:'https://evil.example'},body:'{}'});assert.equal(r.status,403)});
 test('returns a signed-out session without a cookie',async()=>{const r=await call('auth',{}, {DB:{}});assert.deepEqual(await r.json(),{user:null})});
+test('health check reports missing bindings without exposing internals',async()=>{const r=await call('health');assert.equal(r.status,503);const body=await r.json();assert.equal(body.ok,false);assert.deepEqual(body.bindings,{db:false,media:false});assert.equal(body.database,'not-configured')});
+test('health check reports a working database',async()=>{const DB={prepare(){return {first:async()=>({ok:1})}}};const r=await call('health',{},{DB,MEDIA:{}});assert.equal(r.status,200);const body=await r.json();assert.equal(body.ok,true);assert.equal(body.database,'ok');assert.deepEqual(body.bindings,{db:true,media:true})});
+test('health check reports a broken database binding',async()=>{const DB={prepare(){throw new Error('no such database')}};const r=await call('health',{},{DB});assert.equal(r.status,503);assert.equal((await r.json()).database,'error')});
 test('returns 404 for unknown API paths',async()=>{const r=await call('unknown',{}, {DB:{}});assert.equal(r.status,404)});
 
 test('account, social and upload flows work with D1 and R2 bindings', async()=>{

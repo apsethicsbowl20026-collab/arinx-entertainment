@@ -1,0 +1,24 @@
+// Optional: move Pages project configuration into source control.
+// Copy to wrangler.jsonc, replace the placeholders with your own values (or generate
+// this file with `npx wrangler pages download config <your-project-name>`), commit and redeploy.
+// WARNING: once a deployment contains this file, it becomes the source of truth —
+// the matching fields in the Cloudflare dashboard become read-only.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "arinx",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-11-05",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "arinx-db",
+      "database_id": "<your-d1-database-id>"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "arinx-media"
+    }
+  ]
+}

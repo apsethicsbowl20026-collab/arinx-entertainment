@@ -14,6 +14,20 @@ This is **not a 1:1 functional equivalent of YouTube**. In particular it does no
 
 R2 files are served by a Pages Function with HTTP Range support for seeking. Uploads go through the Function; Cloudflare request-size limits and Worker resource limits apply. The 50 MB cap is intentional, not a substitute for direct multipart uploads or a transcoding pipeline. Monitor D1/R2 usage and Cloudflare quotas before scaling.
 
+## Troubleshooting: "The platform database is not configured"
+
+This message means the Pages Function is deployed and running, but it cannot see a D1 binding named `DB` in the deployment that served your request. The frontend and the Function are fine — this is a configuration issue, not a code bug. Check these in order:
+
+1. **Redeploy after adding the binding.** Bindings only take effect on new deployments. In the Cloudflare dashboard go to your Pages project → **Deployments** → **Retry deployment** (or push any commit) after adding or changing a binding in **Settings → Bindings**. If you added the `DB` binding just now, the currently live deployment still has no binding until you redeploy.
+2. **Production vs Preview environments.** Bindings are configured separately for each environment. `your-project.pages.dev` is the production alias, so it needs the binding under **Production**. Preview deployments (branch previews and `<commit>.your-project.pages.dev`) need their own **Preview** binding. A binding added only to Production does not apply to preview deployments, and vice versa.
+3. **Binding name must be exactly `DB`** (D1) and `MEDIA` (R2), case-sensitive. `DATABASE`, `d1`, `ARINX_DB` etc. will not be found by the code.
+4. **The binding must be on the project that serves the domain.** If you have more than one Pages project connected to this repo, double-check you bound D1 on the project that actually serves `arinx.pages.dev` (**Workers & Pages → your project → Settings → Bindings**).
+5. **Verify remotely with `/api/health`.** Every deployment exposes `https://<your-site>/api/health`, which returns JSON like `{"ok":true,"bindings":{"db":true,"media":true},"database":"ok"}` (or `503` with `database` set to `not-configured` / `error`). This is the fastest way to confirm a redeploy picked up the binding — no dashboard access required.
+
+Note on the D1 dashboard metrics: the queries you see there include the migration you applied (`wrangler d1 execute ... --file=migrations/0001_initial.sql`) and any manual `wrangler d1 execute` calls you ran. The live site cannot query D1 at all until a deployment with the `DB` binding is live, so those metric entries are not proof the site is connected. After a successful redeploy, `/api/health` will report `database: "ok"` and account, upload, like, comment and subscription features will work.
+
+If you prefer bindings in source control instead of the dashboard, run `npx wrangler pages download config <your-project-name>` locally (requires `wrangler login`), review the generated `wrangler.jsonc`, commit it, and redeploy. The Wrangler file becomes the source of truth for the project (the corresponding dashboard fields become read-only). See `wrangler.jsonc.example` for the shape of that file; replace the placeholders with your own values or use the `download config` output.
+
 ## Local development
 
 ```sh
@@ -32,6 +46,7 @@ Vite alone serves the frontend and the sample catalog; it does **not** run Pages
 - `web/`: Pages frontend and licensed sample catalog.
 - `functions/api/`: Pages Functions API, using D1 and R2 bindings.
 - `migrations/`: D1 schema.
+- `wrangler.jsonc.example`: template for moving Pages bindings into source control (optional; see Troubleshooting).
 - `src/`: previous Next.js/PostgreSQL implementation, retained for reference; it is not part of the Pages build and does not share data with the D1 version.
 - `public/arinx.html`: previous standalone catalog, retained for reference.
 
