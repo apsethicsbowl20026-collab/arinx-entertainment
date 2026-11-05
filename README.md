@@ -36,3 +36,7 @@ Vite alone serves the frontend and the sample catalog; it does **not** run Pages
 - `public/arinx.html`: previous standalone catalog, retained for reference.
 
 No existing PostgreSQL accounts or videos are automatically migrated to D1. Plan a separate, verified data and media migration before switching an existing deployment.
+
+## Life on Land (SDG 15) website
+
+`life-on-land/` contains **Canopy**, a separate AI-integrated website about UN SDG 15, Life on Land. It has its own package.json, tests and deployment notes (Pages root directory `life-on-land`). See [life-on-land/README.md](life-on-land/README.md).
