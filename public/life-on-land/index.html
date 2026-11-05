@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1f5b3a" />
+  <meta name="description" content="AI for Life on Land: how artificial intelligence helps protect forests, wildlife and land, with an interactive habitat checker and a Land Guide assistant for UN SDG 15." />
+  <meta property="og:title" content="AI for Life on Land — UN SDG 15" />
+  <meta property="og:description" content="How AI helps protect forests, wildlife and land, with interactive tools." />
+  <meta property="og:type" content="website" />
+  <title>AI for Life on Land · SDG 15</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%232e7d4f'/%3E%3Cpath d='M12 5l5 8h-3l3 5H7l3-5H7z' fill='%23fff'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/life-on-land/styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap nav-row">
+      <a class="brand" href="#top" aria-label="Life on Land home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 3l6 9h-3.5l3.5 6H6l3.5-6H6z" fill="currentColor"/></svg>
+        </span>
+        <span>Life on Land <small>· SDG 15</small></span>
+      </a>
+      <nav aria-label="Main">
+        <a href="#goal">The goal</a>
+        <a href="#ai">AI in action</a>
+        <a href="#check">Habitat check</a>
+        <a href="#guide">Land Guide</a>
+        <a href="#act">Take action</a>
+        <a href="#sources">Sources</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="eyebrow">UN Sustainable Development Goal 15</p>
+          <h1>AI for <span class="accent">Life on Land</span></h1>
+          <p class="lead">Forests, soils and wildlife are under pressure. Artificial intelligence can help us see that loss sooner, respond faster and plan restoration better. Explore how it works, check a habitat, and ask our Land Guide.</p>
+          <div class="cta-row">
+            <a class="btn primary" href="#check">Check a habitat</a>
+            <a class="btn ghost" href="#guide">Ask the Land Guide</a>
+          </div>
+        </div>
+        <figure class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 480 360" role="img">
+            <defs>
+              <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#cfe9d8"/><stop offset="1" stop-color="#f4f1e6"/>
+              </linearGradient>
+            </defs>
+            <rect width="480" height="360" rx="28" fill="url(#sky)"/>
+            <circle cx="380" cy="82" r="34" fill="#f6c96b" opacity=".9"/>
+            <path d="M0 230 Q120 150 240 215 T480 200 V360 H0Z" fill="#8cc7a0"/>
+            <path d="M0 270 Q150 200 300 260 T480 250 V360 H0Z" fill="#3f8f5f"/>
+            <g fill="#1d5c3a">
+              <path d="M70 240l22-48 22 48z"/><path d="M104 250l16-34 16 34z"/>
+              <path d="M330 236l26-56 26 56z"/><path d="M366 246l18-38 18 38z"/>
+            </g>
+            <g class="scan" fill="none" stroke="#1f7a4d" stroke-width="2" stroke-dasharray="6 6">
+              <rect x="190" y="150" width="110" height="80" rx="10"/>
+            </g>
+            <circle cx="245" cy="190" r="5" fill="#1f7a4d"/>
+            <g transform="translate(200 128)">
+              <rect width="90" height="22" rx="11" fill="#fff" opacity=".95"/>
+              <text x="45" y="15" text-anchor="middle" font-size="11" font-family="system-ui,sans-serif" fill="#1d5c3a" font-weight="700">Deer · 94%</text>
+            </g>
+          </svg>
+        </figure>
+      </div>
+      <div class="wrap stats" role="list" aria-label="Key facts">
+        <div role="listitem"><strong>31%</strong><span>of Earth's land is forest (4.06 billion ha, FAO 2020)</span></div>
+        <div role="listitem"><strong>10M ha</strong><span>forest lost per year, 2015–2020 (FAO)</span></div>
+        <div role="listitem"><strong>~1M</strong><span>species threatened with extinction (IPBES, 2019)</span></div>
+        <div role="listitem"><strong>100M ha</strong><span>of healthy land degraded per year, 2015–2019 (UNCCD)</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="goal" aria-labelledby="goal-title">
+      <div class="wrap">
+        <h2 id="goal-title">What SDG 15 asks for</h2>
+        <p class="intro">SDG 15 brings forests, drylands, mountains, soils and species into one agenda. Its targets are tracked globally, and AI is increasingly used to measure progress against them.</p>
+        <ul class="target-grid">
+          <li><span class="code">15.1</span><h3>Protect ecosystems</h3><p>Conserve and sustainably use land and freshwater ecosystems, including forests, wetlands, mountains and drylands.</p></li>
+          <li><span class="code">15.2</span><h3>Manage forests</h3><p>Halt deforestation, restore degraded forests and increase afforestation and reforestation.</p></li>
+          <li><span class="code">15.3</span><h3>Restore land</h3><p>Combat desertification and restore degraded land and soil, aiming for a land degradation-neutral world.</p></li>
+          <li><span class="code">15.5</span><h3>Stop biodiversity loss</h3><p>Reduce degradation of natural habitats and protect threatened species from extinction.</p></li>
+          <li><span class="code">15.7</span><h3>End wildlife crime</h3><p>Stop poaching and trafficking of protected species of flora and fauna.</p></li>
+          <li><span class="code">15.8</span><h3>Control invaders</h3><p>Prevent the introduction of invasive alien species and control or eradicate priority species.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section tint" id="ai" aria-labelledby="ai-title">
+      <div class="wrap">
+        <h2 id="ai-title">How AI supports life on land</h2>
+        <p class="intro">Most useful conservation AI is practical and narrow: it turns huge volumes of images, sounds and satellite data into alerts that people can act on. It supports rangers and scientists rather than replacing them.</p>
+        <div class="card-grid">
+          <article class="card">
+            <h3>Camera-trap vision</h3>
+            <p>Computer vision removes empty frames, flags animals and people, and identifies species, so ecologists review far fewer photos.</p>
+            <p class="evidence">Pre-filtering with MegaDetector can cut manual review time by 75–90%. <a href="#src-6">[6]</a></p>
+          </article>
+          <article class="card">
+            <h3>Acoustic guardians</h3>
+            <p>Listening devices in forests use AI to detect chainsaws, vehicles and key species, and send alerts to local partners.</p>
+            <p class="evidence">Rainforest Connection reports AI audio monitoring helping partners in Brazil and Indonesia. <a href="#src-7">[7]</a></p>
+          </article>
+          <article class="card">
+            <h3>Satellite and radar alerts</h3>
+            <p>Models scan satellite imagery for forest loss. Radar-based alerts can see through cloud, which matters in the tropics.</p>
+            <p class="evidence">Global Forest Watch's GLAD and RADD alerts update weekly or faster. <a href="#src-6">[6]</a> <a href="#src-7">[7]</a></p>
+          </article>
+          <article class="card">
+            <h3>Drone surveys</h3>
+            <p>Thermal and RGB drones count animals at night and in hard-to-reach areas, and help map invasive plants.</p>
+            <p class="evidence">Drone counts of seabirds were 43–96% more accurate than ground counts. <a href="#src-6">[6]</a></p>
+          </article>
+          <article class="card">
+            <h3>Forest inventories</h3>
+            <p>Satellite data combined with AI estimates stem density, species distribution and carbon storage across large areas.</p>
+            <p class="evidence">Used to support sustainable forest management under SDG 15.2. <a href="#src-7">[7]</a></p>
+          </article>
+          <article class="card">
+            <h3>Species identification apps</h3>
+            <p>Image recognition helps citizen scientists identify plants and animals, turning everyday photos into biodiversity records.</p>
+            <p class="evidence">Examples include iNaturalist and Pl@ntNet. <a href="#src-11">[11]</a></p>
+          </article>
+        </div>
+        <div class="callout">
+          <strong>Use AI with care.</strong> Models are only as good as their training data. They can miss rare species, misread images from new places, and produce confident-looking results. Keep a human expert in the loop and report uncertainty.
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="check" aria-labelledby="check-title">
+      <div class="wrap">
+        <h2 id="check-title">Habitat health check</h2>
+        <p class="intro">Enter a few facts about a patch of land to get an indicative health score and suggested next steps. This is a transparent rule-based estimate for learning and discussion, not machine learning, and it does not replace a field survey.</p>
+        <div class="tool">
+          <form id="habitat-form" class="form-grid" novalidate>
+            <div class="field">
+              <label for="cover">Forest cover (% of area)</label>
+              <input id="cover" name="cover" type="number" min="0" max="100" step="1" value="60" required />
+            </div>
+            <div class="field">
+              <label for="trend">Forest change, last 10 years (%)</label>
+              <input id="trend" name="trend" type="number" min="-50" max="20" step="1" value="-5" required />
+              <small>Negative means loss. Example: -5 means 5% less forest.</small>
+            </div>
+            <div class="field">
+              <label for="protection">Protection status</label>
+              <select id="protection" name="protection">
+                <option value="none">Not protected</option>
+                <option value="partial">Partly protected</option>
+                <option value="strict">Strictly protected</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="invasives">Invasive species</label>
+              <select id="invasives" name="invasives">
+                <option value="none">None known</option>
+                <option value="some">Some present</option>
+                <option value="widespread">Widespread</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="landUse">Surrounding land use</label>
+              <select id="landUse" name="landUse">
+                <option value="natural">Mostly natural</option>
+                <option value="mixed">Mixed farming and forest</option>
+                <option value="intensive">Intensive agriculture</option>
+                <option value="urban">Urban or industrial</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button class="btn primary" type="submit">Calculate score</button>
+              <p class="form-error" id="habitat-error" role="alert" hidden></p>
+            </div>
+          </form>
+          <div class="result" id="habitat-result" aria-live="polite">
+            <p class="muted">Your score and suggested actions will appear here.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section tint" id="guide" aria-labelledby="guide-title">
+      <div class="wrap">
+        <div class="guide-head">
+          <div>
+            <h2 id="guide-title">Ask the Land Guide</h2>
+            <p class="intro">Ask about forests, land, wildlife or AI in conservation.</p>
+          </div>
+          <span class="mode-badge" id="mode-badge" data-mode="checking">Checking mode…</span>
+        </div>
+        <div class="chat">
+          <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-label="Conversation with the Land Guide"></div>
+          <div class="chips" id="chips" aria-label="Suggested questions"></div>
+          <form class="chat-form" id="chat-form">
+            <label class="sr-only" for="chat-input">Your question</label>
+            <input id="chat-input" name="question" type="text" maxlength="1000" autocomplete="off" placeholder="For example: How do camera traps use AI?" />
+            <button class="btn primary" type="submit" id="chat-send">Ask</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="act" aria-labelledby="act-title">
+      <div class="wrap">
+        <h2 id="act-title">Take action</h2>
+        <p class="intro">Tick the actions you commit to. Your choices are saved in this browser only.</p>
+        <div class="pledge">
+          <div class="progress" aria-hidden="true"><span id="pledge-bar"></span></div>
+          <p id="pledge-count" class="muted" aria-live="polite">0 of 5 actions committed</p>
+          <ul class="checklist">
+            <li><label><input type="checkbox" data-pledge="report" /> Report a wildlife or plant sighting on a citizen-science app</label></li>
+            <li><label><input type="checkbox" data-pledge="buy" /> Choose wood, paper and palm products certified for low deforestation risk</label></li>
+            <li><label><input type="checkbox" data-pledge="native" /> Plant native species in my garden or community space</label></li>
+            <li><label><input type="checkbox" data-pledge="alerts" /> Follow a deforestation alert system for a region I care about</label></li>
+            <li><label><input type="checkbox" data-pledge="share" /> Share what I learned about AI and conservation with someone else</label></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="sources" aria-labelledby="sources-title">
+      <div class="wrap">
+        <h2 id="sources-title">Sources</h2>
+        <p class="intro">Figures are from the organisations below. Some are quoted via secondary summaries; check the primary report before citing in formal work.</p>
+        <ol class="sources">
+          <li id="src-1"><a href="https://openknowledge.fao.org/server/api/core/bitstreams/9f24d451-2e56-4ae2-8a4a-1bc511f5e60e/content" rel="noopener">FAO, Global Forest Resources Assessment 2020: Key findings</a></li>
+          <li id="src-2"><a href="https://www.fao.org/newsroom/detail/World's-most-comprehensive-analysis-of-forest-resources-launched-today-in-an-innovative-format/en" rel="noopener">FAO newsroom, Global Forest Resources Assessment launch (21 July 2020)</a></li>
+          <li id="src-3"><a href="https://openknowledge.fao.org/server/api/core/bitstreams/dfb12960-44ee-4ddc-95f7-bec93fbb141e/content" rel="noopener">FAO, The State of the World's Forests 2020</a></li>
+          <li id="src-4"><a href="https://www.gaiaeducation.org/blog/106580-sdg-15-life-on-land" rel="noopener">Gaia Education, SDG 15: Life on Land (land degradation figures, citing UNCCD)</a></li>
+          <li id="src-5"><a href="https://www.cencenelec.eu/european-standardization/sustainable-development-goals-sdgs/sdg-goal-15-life-on-land/" rel="noopener">CEN-CENELEC, SDG Goal 15: Life on Land (species extinction, citing IPBES)</a></li>
+          <li id="src-6"><a href="https://www.digitalwindmill.com/sustainability-policy/ai-for-wildlife-monitoring-technologies-data-needs-practical-conservation" rel="noopener">Digital Windmill, AI for Wildlife Monitoring (camera traps, MegaDetector, GLAD, drone counts)</a></li>
+          <li id="src-7"><a href="https://link.springer.com/article/10.1007/s44353-024-00002-2" rel="noopener">Springer, Artificial intelligence for sustainability: Earth observation and forests (2024)</a></li>
+          <li id="src-8"><a href="https://thesdgvizproject.com/2021/04/07/goal-15-life-on-land/" rel="noopener">The SDG Viz Project, Goal 15: Life on Land</a></li>
+          <li id="src-9"><a href="https://sdgs.un.org/goals/goal15" rel="noopener">United Nations, Sustainable Development Goals: Goal 15</a></li>
+          <li id="src-10"><a href="https://www.globalforestwatch.org" rel="noopener">Global Forest Watch (forest alerts and monitoring)</a></li>
+          <li id="src-11"><a href="https://www.inaturalist.org" rel="noopener">iNaturalist (citizen-science species identification)</a></li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>An educational website about UN SDG 15. It is not affiliated with the United Nations. Figures are as published by the cited sources and may have been updated since.</p>
+    </div>
+  </footer>
+
+  <script type="module" src="/life-on-land/app.js"></script>
+</body>
+</html>
