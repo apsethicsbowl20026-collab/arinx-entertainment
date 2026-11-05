@@ -15,7 +15,7 @@ test('returns 404 for unknown API paths',async()=>{const r=await call('unknown',
 test('account, social and upload flows work with D1 and R2 bindings', async()=>{
   const {DatabaseSync}=await import('node:sqlite');
   const {readFileSync}=await import('node:fs');
-  const sql=new DatabaseSync(':memory:'); sql.exec(readFileSync('migrations/0001_initial.sql','utf8'));
+  const sql=new DatabaseSync(':memory:'); sql.exec(['migrations/0001_initial.sql','migrations/0002_admin_role.sql'].map(f=>readFileSync(f,'utf8')).join('\n'));
   const DB={prepare(query){const bound=(values=[])=>({async first(){return sql.prepare(query).get(...values) || null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){sql.prepare(query).run(...values);return {success:true}}});return {...bound(),bind(...values){return bound(values)}}}};
   const objects=new Map();
   const MEDIA={async put(key,body){objects.set(key,body)},async get(key){const data=objects.get(key);return data?{body:data,size:data.byteLength}:null},async delete(key){objects.delete(key)}};
@@ -34,5 +34,28 @@ test('account, social and upload flows work with D1 and R2 bindings', async()=>{
   r=await call(`media/${id}`,{},env);assert.deepEqual([...new Uint8Array(await r.arrayBuffer())],[1,2,3]);
   r=await request('auth',{action:'logout'},session);assert.equal(r.status,200);
   r=await call('auth',{headers:{Cookie:session}},env);assert.equal((await r.json()).user,null);
+  sql.close();
+});
+
+test('admin endpoints enforce roles and manage members', async()=>{
+  const {DatabaseSync}=await import('node:sqlite');
+  const {readFileSync}=await import('node:fs');
+  const sql=new DatabaseSync(':memory:'); sql.exec(['migrations/0001_initial.sql','migrations/0002_admin_role.sql'].map(f=>readFileSync(f,'utf8')).join('\n'));
+  const DB={prepare(query){const bound=(values=[])=>({async first(){return sql.prepare(query).get(...values) || null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){sql.prepare(query).run(...values);return {success:true}}});return {...bound(),bind(...values){return bound(values)}}}};
+  const env={DB};
+  const register=async(name,email)=>{const r=await call('auth',{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json'},body:JSON.stringify({action:'register',name,email,password:'a-strong-password'})},env);assert.equal(r.status,201);return r.headers.get('set-cookie').split(';')[0]};
+  const ownerCookie=await register('Site Owner','owner@example.com');
+  const memberCookie=await register('Site Member','member@example.com');
+  const get=(path,cookie)=>call(path,{headers:cookie?{Cookie:cookie}:{}},env);
+  assert.equal((await get('admin/overview',memberCookie)).status,403);
+  assert.equal((await get('admin/overview')).status,403);
+  sql.prepare("UPDATE users SET role='owner' WHERE email='owner@example.com'").run();
+  const overview=await get('admin/overview',ownerCookie);assert.equal(overview.status,200);assert.equal((await overview.json()).counts.users,2);
+  const found=await (await get('admin/users?q=member@example.com',ownerCookie)).json();assert.equal(found.users.length,1);assert.equal(found.users[0].role,'user');
+  const post=(path,body,cookie)=>call(path,{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json',Cookie:cookie},body:JSON.stringify(body)},env);
+  const promote=await post(`admin/users/${found.users[0].id}/role`,{role:'admin'},ownerCookie);assert.equal(promote.status,200);
+  assert.equal((await get('admin/overview',memberCookie)).status,200);
+  const me=(await (await get('auth',ownerCookie)).json()).user;assert.equal(me.role,'owner');
+  const self=await post(`admin/users/${me.id}/role`,{role:'user'},ownerCookie);assert.equal(self.status,400);
   sql.close();
 });

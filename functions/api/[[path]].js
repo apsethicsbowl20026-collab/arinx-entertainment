@@ -10,11 +10,12 @@ const passwordHash = async (password, salt) => {
   return hex(await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:new TextEncoder().encode(salt), iterations:100000}, key, 256));
 };
 const cookie = (token, age) => `arinx_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
-const publicUser = u => u ? {id:u.id, name:u.name} : null;
+const publicUser = u => u ? {id:u.id, name:u.name, role:u.role || 'user'} : null;
+const isAdmin = u => !!u && (u.role === 'admin' || u.role === 'owner');
 async function currentUser(req, db) {
   const token = req.headers.get('Cookie')?.match(/(?:^|;\s*)arinx_session=([a-f0-9]+)/)?.[1];
   if (!token) return null;
-  return db.prepare('SELECT u.id, u.name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').bind(await hash(token), Date.now()).first();
+  return db.prepare('SELECT u.id, u.name, u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').bind(await hash(token), Date.now()).first();
 }
 async function session(db, user) {
   const token = hex(crypto.getRandomValues(new Uint8Array(32)));
@@ -144,6 +145,90 @@ export async function onRequest({request:req, env}) {
       if(!user) return fail('Sign in to see subscriptions.',401);
       const rows = await db.prepare('SELECT creator_id FROM subscriptions WHERE user_id=?').bind(user.id).all();
       return json({creators:rows.results.map(r=>r.creator_id)});
+    }
+    if (path.startsWith('admin')) {
+      if (!isAdmin(user)) return fail('Admin access required.', 403);
+      const count = async sql => (await db.prepare(sql).first()).count;
+      if (path === 'admin/overview' && method === 'GET') {
+        const counts = {
+          users: await count('SELECT COUNT(*) AS count FROM users'),
+          videos: await count('SELECT COUNT(*) AS count FROM videos'),
+          comments: await count('SELECT COUNT(*) AS count FROM comments'),
+          likes: await count('SELECT COUNT(*) AS count FROM likes'),
+          subscriptions: await count('SELECT COUNT(*) AS count FROM subscriptions')
+        };
+        const recentUsers = (await db.prepare('SELECT id,name,email,role,created_at AS createdAt FROM users ORDER BY created_at DESC LIMIT 5').all()).results;
+        const recentVideos = (await db.prepare('SELECT v.id,v.title,v.created_at AS createdAt,u.name FROM videos v JOIN users u ON u.id=v.user_id ORDER BY v.created_at DESC LIMIT 5').all()).results;
+        return json({counts, recentUsers, recentVideos});
+      }
+      if (path === 'admin/users' && method === 'GET') {
+        const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+        const esc = s => s.replace(/[\\%_]/g, c => '\\' + c);
+        const rows = q
+          ? await db.prepare("SELECT id,name,email,role,created_at AS createdAt FROM users WHERE lower(name) LIKE ? ESCAPE '\\' OR lower(email) LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT 100").bind(`%${esc(q)}%`, `%${esc(q)}%`).all()
+          : await db.prepare('SELECT id,name,email,role,created_at AS createdAt FROM users ORDER BY created_at DESC LIMIT 100').all();
+        return json({users: rows.results});
+      }
+      let m = path.match(/^admin\/users\/([^/]+)\/role$/);
+      if (m && method === 'POST') {
+        const id = m[1], body = await req.json();
+        const role = String(body.role || '');
+        if (!['user', 'admin'].includes(role)) return fail('Role must be "user" or "admin".');
+        const target = await db.prepare('SELECT id,role FROM users WHERE id=?').bind(id).first();
+        if (!target) return fail('User not found.', 404);
+        if (target.id === user.id) return fail('You cannot change your own role.');
+        if (target.role === 'owner') return fail('The owner account cannot be changed.');
+        if (user.role !== 'owner' && role === 'admin') return fail('Only the owner can grant admin.');
+        await db.prepare('UPDATE users SET role=? WHERE id=?').bind(role, id).run();
+        return json({ok: true, id, role});
+      }
+      m = path.match(/^admin\/users\/([^/]+)$/);
+      if (m && method === 'DELETE') {
+        const id = m[1];
+        if (id === user.id) return fail('You cannot delete your own account.');
+        const target = await db.prepare('SELECT id,role FROM users WHERE id=?').bind(id).first();
+        if (!target) return fail('User not found.', 404);
+        if (target.role === 'owner') return fail('The owner account cannot be deleted.');
+        const vids = (await db.prepare('SELECT id,object_key FROM videos WHERE user_id=?').bind(id).all()).results;
+        if (env.MEDIA) for (const v of vids) { try { await env.MEDIA.delete(v.object_key); } catch (e) { console.error('R2 delete failed for', v.object_key, e); } }
+        await db.prepare('DELETE FROM likes WHERE user_id=?').bind(id).run();
+        await db.prepare('DELETE FROM comments WHERE user_id=?').bind(id).run();
+        await db.prepare('DELETE FROM subscriptions WHERE user_id=? OR creator_id=?').bind(id, id).run();
+        await db.prepare('DELETE FROM sessions WHERE user_id=?').bind(id).run();
+        for (const v of vids) {
+          await db.prepare('DELETE FROM likes WHERE video_id=?').bind(v.id).run();
+          await db.prepare('DELETE FROM comments WHERE video_id=?').bind(v.id).run();
+          await db.prepare('DELETE FROM videos WHERE id=?').bind(v.id).run();
+        }
+        await db.prepare('DELETE FROM users WHERE id=?').bind(id).run();
+        return json({ok: true});
+      }
+      if (path === 'admin/comments' && method === 'GET') {
+        const rows = (await db.prepare('SELECT c.id,c.body,c.created_at AS createdAt,c.video_id AS videoId,u.name,u.email FROM comments c JOIN users u ON u.id=c.user_id ORDER BY c.created_at DESC LIMIT 100').all()).results;
+        return json({comments: rows});
+      }
+      m = path.match(/^admin\/comments\/([^/]+)$/);
+      if (m && method === 'DELETE') {
+        const result = await db.prepare('DELETE FROM comments WHERE id=?').bind(m[1]).run();
+        if (result.meta && result.meta.changes === 0) return fail('Comment not found.', 404);
+        return json({ok: true});
+      }
+      if (path === 'admin/videos' && method === 'GET') {
+        const rows = (await db.prepare('SELECT v.id,v.title,v.category,v.created_at AS createdAt,u.name,u.email FROM videos v JOIN users u ON u.id=v.user_id ORDER BY v.created_at DESC LIMIT 100').all()).results;
+        return json({videos: rows});
+      }
+      m = path.match(/^admin\/videos\/([^/]+)$/);
+      if (m && method === 'DELETE') {
+        const id = m[1];
+        const v = await db.prepare('SELECT id,object_key FROM videos WHERE id=?').bind(id).first();
+        if (!v) return fail('Video not found.', 404);
+        if (env.MEDIA) { try { await env.MEDIA.delete(v.object_key); } catch (e) { console.error('R2 delete failed for', v.object_key, e); } }
+        await db.prepare('DELETE FROM likes WHERE video_id=?').bind(id).run();
+        await db.prepare('DELETE FROM comments WHERE video_id=?').bind(id).run();
+        await db.prepare('DELETE FROM videos WHERE id=?').bind(id).run();
+        return json({ok: true});
+      }
+      return fail('Not found.', 404);
     }
     return fail('Not found.',404);
   } catch (error) { console.error('API error',error); return fail('Something went wrong. Please try again.',500); }

@@ -7,7 +7,7 @@ This is **not a 1:1 functional equivalent of YouTube**. In particular it does no
 ## Deploy with Cloudflare Pages
 
 1. In Cloudflare, create a D1 database (for example `arinx-db`) and an R2 bucket (for example `arinx-media`). R2 may need to be enabled on your account.
-2. Apply `migrations/0001_initial.sql` to the D1 database. For example, with Wrangler installed and authenticated: `npx wrangler d1 execute arinx-db --remote --file=migrations/0001_initial.sql`. Apply it to a separate preview database as well if you use one. **Do not use the old PostgreSQL schema in `src/db` for this deployment.**
+2. Apply the migrations to the D1 database, in order: `npx wrangler d1 execute arinx-db --remote --file=migrations/0001_initial.sql` and then `--file=migrations/0002_admin_role.sql`. For example: `for f in migrations/*.sql; do npx wrangler d1 execute arinx-db --remote --file="$f"; done`. Apply them to a separate preview database as well if you use one. **Do not use the old PostgreSQL schema in `src/db` for this deployment.**
 3. Connect this repository to Cloudflare Pages. Set the framework preset to **None**, build command to `npm run build`, and build output directory to `dist`. Use Node.js 20 or newer (set `NODE_VERSION` to `20` if needed). Pages automatically builds the `functions/` directory as Pages Functions.
 4. In the Pages project's **Settings → Bindings**, add the D1 database binding named `DB` and the R2 bucket binding named `MEDIA` for both production and preview environments as appropriate. Redeploy after changing bindings. No secrets or API tokens are needed in the repository.
 5. Visit your Pages URL. The sample catalog can be browsed without bindings, but account, uploads, likes, comments and subscriptions require the bindings and initialized database. Wikimedia media is hosted externally and its availability depends on Wikimedia.
@@ -28,6 +28,24 @@ Note on the D1 dashboard metrics: the queries you see there include the migratio
 
 If you prefer bindings in source control instead of the dashboard, run `npx wrangler pages download config <your-project-name>` locally (requires `wrangler login`), review the generated `wrangler.jsonc`, commit it, and redeploy. The Wrangler file becomes the source of truth for the project (the corresponding dashboard fields become read-only). See `wrangler.jsonc.example` for the shape of that file; replace the placeholders with your own values or use the `download config` output.
 
+## Admin console
+
+The live version includes a self-contained admin console at **`https://arinx.pages.dev/admin.html`**. It lets an administrator see site stats, search members, grant/revoke the `admin` role, delete accounts (along with their uploads, comments, likes and subscriptions), delete uploaded videos, and delete comments. Wikimedia Commons sample videos are external and are not deletable from the console.
+
+Roles are stored on the `users` table (`user` → `admin` → `owner`):
+
+- `user`: default for every new account.
+- `admin`: can open the console, view member/video/comment data and moderate content.
+- `owner`: like `admin`, plus the only account that can **grant** `admin`. The owner cannot be changed, demoted or deleted.
+
+New accounts are **never** automatically admin — this project has no email verification, so email is not proof of identity. To promote yourself, first register normally on the site with the account you want to use, then run once:
+
+```sh
+npx wrangler d1 execute arinx-db --remote --command "UPDATE users SET role='owner' WHERE email='you@example.com'"
+```
+
+Your existing session picks up the new role on the next request (no sign-out needed). The console page itself is public HTML, but every `/api/admin/*` endpoint requires an `admin` or `owner` role; everyone else gets `403`.
+
 ## Local development
 
 ```sh
@@ -44,8 +62,9 @@ Vite alone serves the frontend and the sample catalog; it does **not** run Pages
 ## Repository structure
 
 - `web/`: Pages frontend and licensed sample catalog.
-- `functions/api/`: Pages Functions API, using D1 and R2 bindings.
-- `migrations/`: D1 schema.
+- `functions/api/`: Pages Functions API, using D1 and R2 bindings (includes `admin/*` role-gated moderation endpoints).
+- `public/admin.html`: self-contained admin console (served at `/admin.html`).
+- `migrations/`: D1 schema, applied in filename order.
 - `wrangler.jsonc.example`: template for moving Pages bindings into source control (optional; see Troubleshooting).
 - `src/`: previous Next.js/PostgreSQL implementation, retained for reference; it is not part of the Pages build and does not share data with the D1 version.
 - `public/arinx.html`: previous standalone catalog, retained for reference.

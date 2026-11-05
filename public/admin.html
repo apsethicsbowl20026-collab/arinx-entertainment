@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ARINX — Admin console</title>
+<meta name="robots" content="noindex"/>
+<style>
+  :root{font-family:'DM Sans',Arial,sans-serif;color:#17202b;background:#f6f8fa;--accent:#1768e8;--line:#e3e8ee;--surface:#fff;--muted:#68737f;--danger:#d93025}
+  *{box-sizing:border-box}
+  body{margin:0}
+  header{background:var(--surface);border-bottom:1px solid var(--line);padding:0 28px;height:60px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:10}
+  .brand{font-weight:800;font-size:20px;letter-spacing:-1px;color:var(--accent);text-decoration:none}
+  .brand small{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.4px;margin-left:8px}
+  header nav{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:14px}
+  header a{color:var(--muted);text-decoration:none}
+  #whoami{color:var(--muted);font-size:13px}
+  main{max-width:1080px;margin:0 auto;padding:26px 20px 80px}
+  h1{font-size:22px;margin:0 0 16px}
+  h2{font-size:16px;margin:28px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .card b{display:block;font-size:26px;letter-spacing:-.5px}
+  .card span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:13px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;background:#fafbfd}
+  tr:last-child td{border-bottom:0}
+  .email{color:var(--accent)}
+  .tag{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700;background:#eef2f7;color:#566}
+  .tag.owner{background:#ffe8c2;color:#8a5b00}
+  .tag.admin{background:#dceafe;color:#0b4fb3}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 11px;font-size:12px}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.danger{border-color:#f2c7c3;color:var(--danger)}
+  button.danger:hover{background:#fdeeee;border-color:var(--danger)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  input[type=search]{font:inherit;padding:7px 12px;border:1px solid var(--line);border-radius:8px;min-width:230px;margin-bottom:10px}
+  .gate{max-width:520px;margin:80px auto;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:40px 32px}
+  .gate h1{margin-bottom:8px}
+  .gate p{color:var(--muted)}
+  .gate a.button{display:inline-block;margin-top:12px;background:var(--accent);color:#fff;text-decoration:none;padding:10px 22px;border-radius:99px;font-weight:700}
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#17202b;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;display:none;max-width:80vw;z-index:99}
+  .muted{color:var(--muted);font-size:12px}
+  .row-actions{display:flex;gap:8px;flex-wrap:wrap}
+  @media(max-width:720px){table,thead{font-size:12px}th:nth-child(3),td:nth-child(3){display:none}}
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">ARINX<small>ADMIN CONSOLE</small></a>
+  <nav><span id="whoami"></span><a href="/">← Back to ARINX</a><a href="#" id="logout" hidden>Sign out</a></nav>
+</header>
+
+<div id="gate" class="gate" hidden>
+  <h1>Admins only</h1>
+  <p id="gate-msg">Sign in with the owner or an admin account to use this console.</p>
+  <a class="button" href="/">Go to sign in</a>
+</div>
+
+<main id="app" hidden>
+  <h1>Site overview</h1>
+  <div class="cards" id="counts"></div>
+
+  <h2>Members</h2>
+  <input id="user-search" type="search" placeholder="Search by name or email…" autocomplete="off"/>
+  <table>
+    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead>
+    <tbody id="user-rows"></tbody>
+  </table>
+
+  <h2>Uploaded videos</h2>
+  <table>
+    <thead><tr><th>Title</th><th>Creator</th><th>Category</th><th>Uploaded</th><th>Actions</th></tr></thead>
+    <tbody id="video-rows"></tbody>
+  </table>
+  <p class="muted">Wikimedia Commons sample videos are not listed — they are external and cannot be removed here.</p>
+
+  <h2>Recent comments</h2>
+  <table>
+    <thead><tr><th>Author</th><th>Comment</th><th>When</th><th>Actions</th></tr></thead>
+    <tbody id="comment-rows"></tbody>
+  </table>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (path, options = {}) => {
+  const r = await fetch('/api/' + path, options);
+  let d = null;
+  try { d = await r.json(); } catch {}
+  if (!r.ok) throw Error(d && d.error || 'Request failed (' + r.status + ')');
+  return d;
+};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate = t => (!t || t < 1000000000000) ? '—' : new Date(t).toLocaleDateString(undefined, {year:'numeric', month:'short', day:'numeric'});
+const toast = msg => { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 4000); };
+const roleTag = role => `<span class="tag ${esc(role)}">${esc(role)}</span>`;
+let me = null;
+
+async function loadOverview() {
+  const d = await api('admin/overview');
+  $('#counts').innerHTML = [
+    ['users','Users'],['videos','Videos'],['comments','Comments'],['likes','Likes'],['subscriptions','Subscriptions']
+  ].map(([k, label]) => `<div class="card"><b>${esc(d.counts[k])}</b><span>${label}</span></div>`).join('');
+}
+
+async function loadUsers(q = '') {
+  const d = await api('admin/users' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  $('#user-rows').innerHTML = d.users.map(u => {
+    const isMe = u.id === me.id, isOwner = u.role === 'owner';
+    const canGrant = me.role === 'owner' && !isMe && !isOwner;
+    const promoteBtn = u.role === 'user'
+      ? `<button data-role="admin" data-id="${esc(u.id)}" ${canGrant ? '' : 'disabled'}>Make admin</button>`
+      : (u.role === 'admin' ? `<button data-role="user" data-id="${esc(u.id)}" ${!isMe && !isOwner ? '' : 'disabled'}>Demote</button>` : '');
+    return `<tr><td>${esc(u.name)}</td><td class="email">${esc(u.email)}</td><td>${roleTag(u.role)}</td><td>${fmtDate(u.createdAt)}</td><td><div class="row-actions">${promoteBtn}<button class="danger" data-delete="${esc(u.id)}" ${(!isMe && !isOwner) ? '' : 'disabled'}>Delete</button></div></td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="muted">No members found.</td></tr>';
+}
+
+async function loadVideos() {
+  const d = await api('admin/videos');
+  $('#video-rows').innerHTML = d.videos.map(v =>
+    `<tr><td>${esc(v.title)}</td><td>${esc(v.name)}<br><span class="muted">${esc(v.email)}</span></td><td>${esc(v.category)}</td><td>${fmtDate(v.createdAt)}</td><td><button class="danger" data-del-video="${esc(v.id)}">Delete</button></td></tr>`
+  ).join('') || '<tr><td colspan="5" class="muted">No uploads yet.</td></tr>';
+}
+
+async function loadComments() {
+  const d = await api('admin/comments');
+  $('#comment-rows').innerHTML = d.comments.map(c =>
+    `<tr><td>${esc(c.name)}<br><span class="muted">${esc(c.email)}</span></td><td>${esc(c.body)}</td><td>${fmtDate(c.createdAt)}</td><td><button class="danger" data-del-comment="${esc(c.id)}">Delete</button></td></tr>`
+  ).join('') || '<tr><td colspan="4" class="muted">No comments yet.</td></tr>';
+}
+
+const refresh = async () => { await Promise.all([loadOverview(), loadUsers($('#user-search').value), loadVideos(), loadComments()]); };
+
+document.addEventListener('click', async event => {
+  const t = event.target.closest('button');
+  if (!t || t.disabled) return;
+  try {
+    if (t.dataset.role) {
+      if (!confirm(`Change this account's role to ${t.dataset.role}?`)) return;
+      await api(`admin/users/${t.dataset.id}/role`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({role: t.dataset.role})});
+      toast('Role updated.');
+    } else if (t.dataset.delete) {
+      if (!confirm('Delete this account and ALL of its uploads, comments, likes and subscriptions? This cannot be undone.')) return;
+      await api(`admin/users/${t.dataset.delete}`, {method:'DELETE'});
+      toast('Account deleted.');
+    } else if (t.dataset.delVideo) {
+      if (!confirm('Delete this video permanently?')) return;
+      await api(`admin/videos/${t.dataset.delVideo}`, {method:'DELETE'});
+      toast('Video deleted.');
+    } else if (t.dataset.delComment) {
+      if (!confirm('Delete this comment?')) return;
+      await api(`admin/comments/${t.dataset.delComment}`, {method:'DELETE'});
+      toast('Comment deleted.');
+    } else return;
+    await refresh();
+  } catch (err) { toast(err.message); }
+});
+
+$('#user-search').addEventListener('input', e => { loadUsers(e.target.value).catch(err => toast(err.message)); });
+$('#logout').addEventListener('click', async e => {
+  e.preventDefault();
+  await api('auth', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'logout'})});
+  location.href = '/';
+});
+
+(async () => {
+  try {
+    const { user } = await api('auth');
+    if (!user || (user.role !== 'admin' && user.role !== 'owner')) {
+      $('#gate-msg').textContent = user
+        ? `Signed in as ${user.name}, but this account is not an admin.`
+        : 'Sign in with the owner or an admin account to use this console.';
+      $('#gate').hidden = false;
+      return;
+    }
+    me = user;
+    $('#whoami').textContent = `${user.name} · ${user.role}`;
+    $('#logout').hidden = false;
+    $('#app').hidden = false;
+    await refresh();
+  } catch (err) {
+    $('#gate-msg').textContent = 'Could not reach the platform: ' + err.message;
+    $('#gate').hidden = false;
+  }
+})();
+</script>
+</body>
+</html>
