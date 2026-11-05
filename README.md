@@ -30,7 +30,7 @@ If you prefer bindings in source control instead of the dashboard, run `npx wran
 
 ## Admin console
 
-The live version includes a self-contained admin console at **`https://arinx.pages.dev/admin.html`**. It lets an administrator see site stats, search members, grant/revoke the `admin` role, delete accounts (along with their uploads, comments, likes and subscriptions), delete uploaded videos, and delete comments. Wikimedia Commons sample videos are external and are not deletable from the console.
+The live version includes a self-contained admin console at **`https://arinx.pages.dev/admin`**. It lets an administrator see site stats, search members, grant/revoke the `admin` role, delete accounts (along with their uploads, comments, likes and subscriptions), delete uploaded videos, and delete comments. Wikimedia Commons sample videos are external and are not deletable from the console.
 
 Roles are stored on the `users` table (`user` → `admin` → `owner`):
 
@@ -63,7 +63,7 @@ Vite alone serves the frontend and the sample catalog; it does **not** run Pages
 
 - `web/`: Pages frontend and licensed sample catalog.
 - `functions/api/`: Pages Functions API, using D1 and R2 bindings (includes `admin/*` role-gated moderation endpoints).
-- `public/admin.html`: self-contained admin console (served at `/admin.html`).
+- `public/admin.html`: self-contained admin console (served at `/admin`).
 - `migrations/`: D1 schema, applied in filename order.
 - `wrangler.jsonc.example`: template for moving Pages bindings into source control (optional; see Troubleshooting).
 - `src/`: previous Next.js/PostgreSQL implementation, retained for reference; it is not part of the Pages build and does not share data with the D1 version.
