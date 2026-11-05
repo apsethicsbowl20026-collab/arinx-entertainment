@@ -4,9 +4,10 @@ const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(b
 const fail = (message, status = 400) => json({error: message}, status);
 const hex = bytes => [...new Uint8Array(bytes)].map(b => b.toString(16).padStart(2, '0')).join('');
 const hash = async text => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+// Cloudflare Workers caps PBKDF2 at 100,000 iterations.
 const passwordHash = async (password, salt) => {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  return hex(await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:new TextEncoder().encode(salt), iterations:210000}, key, 256));
+  return hex(await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:new TextEncoder().encode(salt), iterations:100000}, key, 256));
 };
 const cookie = (token, age) => `arinx_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
 const publicUser = u => u ? {id:u.id, name:u.name} : null;
