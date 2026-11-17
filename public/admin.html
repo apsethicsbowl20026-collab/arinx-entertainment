@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>ARINX — Admin console</title>
 <meta name="robots" content="noindex"/>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
   :root{font-family:'DM Sans',Arial,sans-serif;color:#17202b;background:#f6f8fa;--accent:#1768e8;--line:#e3e8ee;--surface:#fff;--muted:#68737f;--danger:#d93025}
   *{box-sizing:border-box}
@@ -44,6 +48,25 @@
   .muted{color:var(--muted);font-size:12px}
   .row-actions{display:flex;gap:8px;flex-wrap:wrap}
   @media(max-width:720px){table,thead{font-size:12px}th:nth-child(3),td:nth-child(3){display:none}}
+  /* Blue-hour console */
+  :root{font-family:'Inter',Arial,sans-serif;color:#eaf3ff;background:#040914;--accent:#4d8dff;--line:rgba(141,180,255,.16);--surface:rgba(12,26,52,.72);--muted:#93a9cb;--danger:#ff7a90}
+  body{min-height:100vh;background:radial-gradient(1000px 600px at 10% -10%,rgba(47,123,255,.28),transparent 60%),radial-gradient(800px 500px at 90% 8%,rgba(57,216,255,.14),transparent 60%),linear-gradient(180deg,#040914,#071528 60%,#040914)}
+  header{background:rgba(5,13,28,.78);backdrop-filter:blur(20px);border-bottom-color:var(--line)}
+  header a:hover{color:#bcd6ff}
+  .brand{font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.06em;font-size:18px}
+  main{max-width:1180px}
+  h1,h2{font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:-.03em}
+  .card,table,.gate{backdrop-filter:blur(18px);box-shadow:0 18px 50px rgba(0,0,0,.35);border-color:var(--line)}
+  th{background:rgba(120,160,230,.06)}
+  .tag{background:rgba(120,160,230,.16);color:#bcd6ff}
+  .tag.owner{background:rgba(255,190,80,.18);color:#ffd28a}
+  .tag.admin{background:rgba(77,141,255,.18);color:#9ec8ff}
+  button{background:rgba(120,160,230,.1);color:#eaf3ff;border-color:var(--line)}
+  button:hover{background:rgba(77,141,255,.2);border-color:var(--accent);color:#fff}
+  button.danger:hover{background:rgba(255,72,96,.18)}
+  input[type=search]{background:rgba(5,13,28,.6);color:#eaf3ff;border-color:var(--line)}
+  #toast{background:linear-gradient(135deg,#2f7bff,#0b72e0);box-shadow:0 12px 30px rgba(47,123,255,.4)}
+  .gate a.button{background:linear-gradient(135deg,#2f7bff,#0b72e0);box-shadow:0 10px 24px rgba(47,123,255,.35)}
 </style>
 </head>
 <body>

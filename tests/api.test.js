@@ -15,7 +15,7 @@ test('returns 404 for unknown API paths',async()=>{const r=await call('unknown',
 test('account, social and upload flows work with D1 and R2 bindings', async()=>{
   const {DatabaseSync}=await import('node:sqlite');
   const {readFileSync}=await import('node:fs');
-  const sql=new DatabaseSync(':memory:'); sql.exec(['migrations/0001_initial.sql','migrations/0002_admin_role.sql'].map(f=>readFileSync(f,'utf8')).join('\n'));
+  const sql=new DatabaseSync(':memory:'); sql.exec(['migrations/0001_initial.sql','migrations/0002_admin_role.sql','migrations/0003_media_and_imports.sql'].map(f=>readFileSync(f,'utf8')).join('\n'));
   const DB={prepare(query){const bound=(values=[])=>({async first(){return sql.prepare(query).get(...values) || null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){sql.prepare(query).run(...values);return {success:true}}});return {...bound(),bind(...values){return bound(values)}}}};
   const objects=new Map();
   const MEDIA={async put(key,body){objects.set(key,body)},async get(key){const data=objects.get(key);return data?{body:data,size:data.byteLength}:null},async delete(key){objects.delete(key)}};
@@ -40,7 +40,7 @@ test('account, social and upload flows work with D1 and R2 bindings', async()=>{
 test('admin endpoints enforce roles and manage members', async()=>{
   const {DatabaseSync}=await import('node:sqlite');
   const {readFileSync}=await import('node:fs');
-  const sql=new DatabaseSync(':memory:'); sql.exec(['migrations/0001_initial.sql','migrations/0002_admin_role.sql'].map(f=>readFileSync(f,'utf8')).join('\n'));
+  const sql=new DatabaseSync(':memory:'); sql.exec(['migrations/0001_initial.sql','migrations/0002_admin_role.sql','migrations/0003_media_and_imports.sql'].map(f=>readFileSync(f,'utf8')).join('\n'));
   const DB={prepare(query){const bound=(values=[])=>({async first(){return sql.prepare(query).get(...values) || null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){sql.prepare(query).run(...values);return {success:true}}});return {...bound(),bind(...values){return bound(values)}}}};
   const env={DB};
   const register=async(name,email)=>{const r=await call('auth',{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json'},body:JSON.stringify({action:'register',name,email,password:'a-strong-password'})},env);assert.equal(r.status,201);return r.headers.get('set-cookie').split(';')[0]};
@@ -57,5 +57,50 @@ test('admin endpoints enforce roles and manage members', async()=>{
   assert.equal((await get('admin/overview',memberCookie)).status,200);
   const me=(await (await get('auth',ownerCookie)).json()).user;assert.equal(me.role,'owner');
   const self=await post(`admin/users/${me.id}/role`,{role:'user'},ownerCookie);assert.equal(self.status,400);
+  sql.close();
+});
+
+test('uploads are stored in D1 chunks and streamed with range support when R2 is absent', async()=>{
+  const {DatabaseSync}=await import('node:sqlite');
+  const {readFileSync}=await import('node:fs');
+  const sql=new DatabaseSync(':memory:'); sql.exec(['migrations/0001_initial.sql','migrations/0002_admin_role.sql','migrations/0003_media_and_imports.sql'].map(f=>readFileSync(f,'utf8')).join('\n'));
+  const DB={prepare(query){const bound=(values=[])=>({async first(){return sql.prepare(query).get(...values) || null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){sql.prepare(query).run(...values);return {success:true}}});return {...bound(),bind(...values){return bound(values)}}}};
+  const env={DB};
+  const register=await call('auth',{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json'},body:JSON.stringify({action:'register',name:'Chunk Creator',email:'chunks@example.com',password:'a-strong-password'})},env);
+  assert.equal(register.status,201);
+  const session=register.headers.get('set-cookie').split(';')[0];
+  const bytes=new Uint8Array(1024*1024+123).map((_,i)=>i%251);
+  const form=new FormData();
+  form.append('file',new File([bytes],'chunked.mp4',{type:'video/mp4'}));
+  form.append('title','Chunked video');
+  form.append('category','Technology');
+  form.append('duration','42');
+  form.append('poster',new File([new Uint8Array([255,216,255,224])],'poster.jpg',{type:'image/jpeg'}));
+  let r=await call('upload',{method:'POST',headers:{Origin:'https://example.com',Cookie:session},body:form},env);
+  assert.equal(r.status,201);
+  const {id,storage}=await r.json();assert.equal(storage,'d1');
+  r=await call('videos',{},env);const listed=(await r.json()).videos.find(v=>v.id===id);assert.equal(listed.durationSec,42);assert.equal(listed.thumb,`/api/thumb/${id}`);assert.equal(listed.url,`/api/media/${id}`);
+  r=await call(`thumb/${id}`,{},env);assert.equal(r.headers.get('content-type'),'image/jpeg');assert.deepEqual([...new Uint8Array(await r.arrayBuffer())],[255,216,255,224]);
+  r=await call(`media/${id}`,{},env);assert.equal(r.status,200);assert.equal(r.headers.get('accept-ranges'),'bytes');assert.deepEqual([...new Uint8Array(await r.arrayBuffer())],[...bytes]);
+  r=await call(`media/${id}`,{headers:{Range:'bytes=100-199'}},env);assert.equal(r.status,206);assert.equal(r.headers.get('content-range'),`bytes 100-199/${bytes.length}`);assert.deepEqual([...new Uint8Array(await r.arrayBuffer())],[...bytes.slice(100,200)]);
+  sql.close();
+});
+
+test('publishes external video links without storing media', async()=>{
+  const {DatabaseSync}=await import('node:sqlite');
+  const {readFileSync}=await import('node:fs');
+  const sql=new DatabaseSync(':memory:'); sql.exec(['migrations/0001_initial.sql','migrations/0002_admin_role.sql','migrations/0003_media_and_imports.sql'].map(f=>readFileSync(f,'utf8')).join('\n'));
+  const DB={prepare(query){const bound=(values=[])=>({async first(){return sql.prepare(query).get(...values) || null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){sql.prepare(query).run(...values);return {success:true}}});return {...bound(),bind(...values){return bound(values)}}}};
+  const env={DB};
+  const register=await call('auth',{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json'},body:JSON.stringify({action:'register',name:'Link Creator',email:'links@example.com',password:'a-strong-password'})},env);
+  const session=register.headers.get('set-cookie').split(';')[0];
+  const post=body=>call('videos',{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json',Cookie:session},body:JSON.stringify(body)},env);
+  let r=await post({url:'https://cdn.example.com/trailers/clip.mp4',title:'Linked clip',category:'Movies'});
+  assert.equal(r.status,201);
+  const {id}=await r.json();
+  r=await call('videos',{},env);const listed=(await r.json()).videos.find(v=>v.id===id);assert.equal(listed.provider,'external');assert.equal(listed.sourceUrl,'https://cdn.example.com/trailers/clip.mp4');assert.equal(listed.embed,null);
+  r=await call(`media/${id}`,{},env);assert.equal(r.status,302);assert.equal(r.headers.get('location'),'https://cdn.example.com/trailers/clip.mp4');
+  r=await post({url:'https://cdn.example.com/trailers/clip.mp4',title:'Duplicate'});assert.equal(r.status,409);
+  r=await post({url:'not-a-url'});assert.equal(r.status,400);
   sql.close();
 });

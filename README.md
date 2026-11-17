@@ -1,18 +1,25 @@
 # ARINX
 
-ARINX is a video-sharing starter built for **Cloudflare Pages**. It includes a responsive discovery feed, search and category filters, a video player, watch history and Watch later (stored in the browser), accounts, uploads, likes, comments and creator subscriptions. The sample catalog consists of freely licensed Wikimedia Commons videos; each watch page links to its source and attribution.
+ARINX is a video-sharing starter built for **Cloudflare Pages** with a deep-blue, glass-and-aurora interface. It includes a bento discovery feed, search and category filters, a custom player with resume and cinema mode, a vertical Shorts feed, watch history and Watch later (stored in the browser), accounts, uploads, likes, comments and creator subscriptions. The sample catalog consists of freely licensed Wikimedia Commons videos; each watch page links to its source and attribution.
 
-This is **not a 1:1 functional equivalent of YouTube**. In particular it does not provide transcoding/adaptive streaming, live streaming, recommendation algorithms, moderation tooling, email verification/password reset, captions processing, notifications, monetization, or production-grade abuse prevention. Uploaded videos are public and limited to 50 MB. Before opening registration to the public, implement rate limiting, email verification, content moderation/reporting, copyright/takedown processes, and stronger operational controls. Creators must have the rights to their uploads.
+**No R2 bucket is required.** Uploaded videos are stored as 512 KB chunks in the D1 database that already powers accounts, so small uploads work on a plain Pages + D1 setup. If an R2 binding named `MEDIA` is present, ARINX automatically prefers R2 and raises the upload limit to 50 MB. You can also publish external links from **YouTube, Vimeo, Internet Archive, or a direct MP4/WebM/MOV URL** without copying any media.
+
+This is **not a 1:1 functional equivalent of YouTube**. In particular it does not provide transcoding/adaptive streaming, live streaming, recommendation algorithms, moderation tooling, email verification/password reset, captions processing, notifications, monetization, or production-grade abuse prevention. Uploaded videos are public. The default limit is **16 MB per upload without R2** and 50 MB when R2 is bound. Before opening registration to the public, implement rate limiting, email verification, content moderation/reporting, copyright/takedown processes, and stronger operational controls. Creators must have the rights to their uploads and linked videos.
 
 ## Deploy with Cloudflare Pages
 
-1. In Cloudflare, create a D1 database (for example `arinx-db`) and an R2 bucket (for example `arinx-media`). R2 may need to be enabled on your account.
-2. Apply the migrations to the D1 database, in order: `npx wrangler d1 execute arinx-db --remote --file=migrations/0001_initial.sql` and then `--file=migrations/0002_admin_role.sql`. For example: `for f in migrations/*.sql; do npx wrangler d1 execute arinx-db --remote --file="$f"; done`. Apply them to a separate preview database as well if you use one. **Do not use the old PostgreSQL schema in `src/db` for this deployment.**
+1. In Cloudflare, create a D1 database (for example `arinx-db`). An R2 bucket is **optional** — ARINX stores uploads in D1 when R2 is not bound.
+2. Apply all migrations to the D1 database in filename order: `0001_initial.sql`, `0002_admin_role.sql`, and `0003_media_and_imports.sql`. For example, with Wrangler authenticated: `for f in migrations/*.sql; do npx wrangler d1 execute arinx-db --remote --file="$f"; done`. Apply them to a separate preview database as well if you use one. **Do not use the old PostgreSQL schema in `src/db` for this deployment.**
 3. Connect this repository to Cloudflare Pages. Set the framework preset to **None**, build command to `npm run build`, and build output directory to `dist`. Use Node.js 20 or newer (set `NODE_VERSION` to `20` if needed). Pages automatically builds the `functions/` directory as Pages Functions.
-4. In the Pages project's **Settings → Bindings**, add the D1 database binding named `DB` and the R2 bucket binding named `MEDIA` for both production and preview environments as appropriate. Redeploy after changing bindings. No secrets or API tokens are needed in the repository.
-5. Visit your Pages URL. The sample catalog can be browsed without bindings, but account, uploads, likes, comments and subscriptions require the bindings and initialized database. Wikimedia media is hosted externally and its availability depends on Wikimedia.
+4. In the Pages project's **Settings → Bindings**, add the D1 database binding named `DB` for both production and preview environments as appropriate. An optional R2 binding named `MEDIA` enables larger uploads (50 MB) and is used automatically when present. Redeploy after changing bindings. No secrets or API tokens are needed in the repository.
+5. Visit your Pages URL. The sample catalog can be browsed without bindings, but accounts, uploads, likes, comments and subscriptions require the D1 binding and initialized database. Wikimedia media and external imports are hosted elsewhere, so their availability depends on those providers.
 
-R2 files are served by a Pages Function with HTTP Range support for seeking. Uploads go through the Function; Cloudflare request-size limits and Worker resource limits apply. The 50 MB cap is intentional, not a substitute for direct multipart uploads or a transcoding pipeline. Monitor D1/R2 usage and Cloudflare quotas before scaling.
+### Media storage and imports
+
+- **D1 (default):** `POST /api/upload` stores a video in 512 KB BLOB chunks (`media_chunks`) and serves it from `/api/media/:id`. The endpoint implements HTTP Range, so seeking works. A small JPEG poster is stored in `video_thumbs`. The limit is 16 MB, comfortably under D1's 2 MB per-row limit and Pages' request size limit.
+- **R2 (optional):** if the `MEDIA` binding exists, uploads are written to R2 instead and the limit becomes 50 MB. Existing D1-stored videos keep working. `/api/health` reports `storage` (`"d1"` or `"r2"`) and `uploadLimitMB` for the frontend.
+- **External links:** `POST /api/videos` accepts a URL and stores metadata only. YouTube and Vimeo are fetched through oEmbed for title/thumbnail and play in a privacy-friendly iframe; Internet Archive uses its embed player; direct MP4/WebM/MOV URLs play through a redirect to the source. Duplicate URLs are rejected. The source host must allow embedding/playback in a browser.
+- There is no transcoding: upload a browser-compatible MP4 (H.264/AAC) or WebM for the widest support. D1 storage counts toward the database quota (5 GB free), so keep uploads small and moderate.
 
 ## Troubleshooting: "The platform database is not configured"
 
@@ -22,7 +29,7 @@ This message means the Pages Function is deployed and running, but it cannot see
 2. **Production vs Preview environments.** Bindings are configured separately for each environment. `your-project.pages.dev` is the production alias, so it needs the binding under **Production**. Preview deployments (branch previews and `<commit>.your-project.pages.dev`) need their own **Preview** binding. A binding added only to Production does not apply to preview deployments, and vice versa.
 3. **Binding name must be exactly `DB`** (D1) and `MEDIA` (R2), case-sensitive. `DATABASE`, `d1`, `ARINX_DB` etc. will not be found by the code.
 4. **The binding must be on the project that serves the domain.** If you have more than one Pages project connected to this repo, double-check you bound D1 on the project that actually serves `arinx.pages.dev` (**Workers & Pages → your project → Settings → Bindings**).
-5. **Verify remotely with `/api/health`.** Every deployment exposes `https://<your-site>/api/health`, which returns JSON like `{"ok":true,"bindings":{"db":true,"media":true},"database":"ok"}` (or `503` with `database` set to `not-configured` / `error`). This is the fastest way to confirm a redeploy picked up the binding — no dashboard access required.
+5. **Verify remotely with `/api/health`.** Every deployment exposes `https://<your-site>/api/health`, which returns JSON like `{"ok":true,"bindings":{"db":true,"media":false},"database":"ok","storage":"d1","uploadLimitMB":16}` (or `503` with `database` set to `not-configured` / `error`). `media:false` is fine — it only means R2 is not bound, so uploads use D1. This is the fastest way to confirm a redeploy picked up the binding — no dashboard access required.
 
 Note on the D1 dashboard metrics: the queries you see there include the migration you applied (`wrangler d1 execute ... --file=migrations/0001_initial.sql`) and any manual `wrangler d1 execute` calls you ran. The live site cannot query D1 at all until a deployment with the `DB` binding is live, so those metric entries are not proof the site is connected. After a successful redeploy, `/api/health` will report `database: "ok"` and account, upload, like, comment and subscription features will work.
 
@@ -57,12 +64,12 @@ npm test
 
 The test suite requires Node.js 22 or newer for its built-in SQLite test database.
 
-Vite alone serves the frontend and the sample catalog; it does **not** run Pages Functions, so account and backend features need the Pages local runtime. For an integrated local test, install Wrangler, create a local configuration with `pages_build_output_dir = "dist"`, a D1 binding named `DB`, and an R2 binding named `MEDIA`, apply the migration to the local D1 database, and run `npx wrangler pages dev dist` after building. Do not commit real credentials or account IDs. The Vite preview and local dev server are not production deployments.
+Vite alone serves the frontend and the sample catalog; it does **not** run Pages Functions, so account and backend features need the Pages local runtime. For an integrated local test, install Wrangler, create a local configuration with `pages_build_output_dir = "dist"` and a D1 binding named `DB`, apply the migrations to the local D1 database, and run `npx wrangler pages dev dist` after building. R2 is optional. Do not commit real credentials or account IDs. The Vite preview and local dev server are not production deployments.
 
 ## Repository structure
 
-- `web/`: Pages frontend and licensed sample catalog.
-- `functions/api/`: Pages Functions API, using D1 and R2 bindings (includes `admin/*` role-gated moderation endpoints).
+- `web/`: Pages frontend (app shell, reusable components, overlays, pages, player, helpers and the licensed sample catalog), built by Vite.
+- `functions/api/`: Pages Functions API, using the `DB` binding and an optional `MEDIA` (R2) binding. Includes chunked media serving, external link imports and role-gated `admin/*` moderation endpoints.
 - `public/admin.html`: self-contained admin console (served at `/admin`).
 - `migrations/`: D1 schema, applied in filename order.
 - `wrangler.jsonc.example`: template for moving Pages bindings into source control (optional; see Troubleshooting).

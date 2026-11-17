@@ -1,52 +1,296 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Menu, Search, Video, Bell, UserRound, Home, Clapperboard, UsersRound, History, Bookmark, ThumbsUp, Share2, ChevronRight, X, Compass, Radio, Music2, Gamepad2, Trophy, Lightbulb, Settings2, Moon, Sun, LogOut, UploadCloud, Play, Check, Clock3, ArrowLeft, MessageCircle, ExternalLink} from 'lucide-react';
+import {
+  Bookmark, Clapperboard, Command, Compass, History, LayoutDashboard, LogOut, Moon, Plus,
+  Search, Shield, Sun, UploadCloud, UserRound, Video
+} from 'lucide-react';
 import catalog from './catalog.json';
+import {api, cx, mergeVideos, post, read, write} from './lib.js';
+import {Avatar, Logo, Toasts} from './components.jsx';
+import {AuthModal, CommandPalette, UploadModal} from './overlays.jsx';
+import {Home, Shorts, Library, SearchPage} from './pages.jsx';
+import {Watch} from './watch.jsx';
 import './style.css';
 
-const categories=['All','Entertainment','Animation','Movies','Science','Gaming','Music','Sports','Education','Technology'];
-const initialRoute=()=>{const p=new URLSearchParams(location.search);return {page:p.get('v')?'watch':p.get('page')||'home',id:p.get('v')||''}};
-const duration=s=>{if(!s)return '';const h=Math.floor(s/3600),m=Math.floor(s%3600/60),sec=Math.floor(s%60);return h?`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`:`${m}:${String(sec).padStart(2,'0')}`};
-const readLocal=(key)=>{try{return JSON.parse(localStorage.getItem(key)||'[]')}catch{return []}};
-async function api(path, options={}) {const response=await fetch('/api/'+path,options); let data; try{data=await response.json()}catch{throw Error('The platform backend is not available. Configure Cloudflare Pages Functions to use this feature.')} if(!response.ok)throw Error(data.error||'Something went wrong.');return data}
-const post=(path,body)=>api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-function Avatar({name='A',size=''}){return <span className={'avatar '+size}>{name.trim().charAt(0).toUpperCase()||'A'}</span>}
-function Brand({onClick}){return <button className="brand" onClick={onClick} aria-label="ARINX home"><span className="brand-mark"><Play size={16} fill="currentColor" strokeWidth={0}/></span><span>ARINX</span><sup>IN</sup></button>}
-function Card({v,onWatch}){return <article className="video-card"><button className="thumb" onClick={()=>onWatch(v)} aria-label={'Watch '+v.title}>{v.thumb?<img src={v.thumb} loading="lazy" alt=""/>:<span className="thumb-placeholder"><Play size={34} fill="currentColor"/></span>}{v.durationSec>0&&<span className="duration">{duration(v.durationSec)}</span>}</button><div className="card-info"><Avatar name={v.author}/><div className="card-copy"><button className="card-title" onClick={()=>onWatch(v)}>{v.title}</button><div className="card-author">{v.author}</div><div className="card-meta">{v.createdAt ? new Date(v.createdAt).toLocaleDateString() : 'Wikimedia Commons'} <span>·</span> {v.category}</div></div></div></article>}
-function App(){
- const [route,setRoute]=useState(initialRoute),[expanded,setExpanded]=useState(true),[mobileNav,setMobileNav]=useState(false),[dark,setDark]=useState(()=>localStorage.getItem('arinx-theme')==='dark');
- const [videos,setVideos]=useState(catalog),[category,setCategory]=useState('All'),[search,setSearch]=useState(''),[query,setQuery]=useState(''),[user,setUser]=useState(null),[modal,setModal]=useState(''),[notice,setNotice]=useState(''),[saved,setSaved]=useState(()=>readLocal('arinx-saved')),[history,setHistory]=useState(()=>readLocal('arinx-history')),[subscriptions,setSubscriptions]=useState([]),[accountMenu,setAccountMenu]=useState(false);
- const refresh=()=>api('videos').then(d=>setVideos([...d.videos,...catalog])).catch(()=>setVideos(catalog));
- useEffect(()=>{refresh();api('auth').then(d=>setUser(d.user)).catch(()=>{});const pop=()=>setRoute(initialRoute());window.addEventListener('popstate',pop);return()=>window.removeEventListener('popstate',pop)},[]);
- useEffect(()=>{document.documentElement.dataset.theme=dark?'dark':'light';localStorage.setItem('arinx-theme',dark?'dark':'light')},[dark]);
- useEffect(()=>{localStorage.setItem('arinx-saved',JSON.stringify(saved))},[saved]);useEffect(()=>{localStorage.setItem('arinx-history',JSON.stringify(history))},[history]);
- useEffect(()=>{if(user)api('subscriptions').then(d=>setSubscriptions(d.creators)).catch(()=>{});else setSubscriptions([])},[user]);
- const notify=m=>{setNotice(m);setTimeout(()=>setNotice(''),4000)};
- const go=(page,id='')=>{if(page==='subscriptions' && user)api('subscriptions').then(d=>setSubscriptions(d.creators)).catch(()=>{});const url=page==='watch'?`/?v=${encodeURIComponent(id)}`:page==='home'?'/':`/?page=${page}`;historyPush(url);setRoute({page,id});setMobileNav(false);window.scrollTo(0,0)};
- const watch=v=>{setHistory(h=>[v.id,...h.filter(id=>id!==v.id)].slice(0,100));go('watch',v.id)};
- const toggleSaved=id=>setSaved(s=>s.includes(id)?s.filter(x=>x!==id):[id,...s]);
- const selected=videos.find(v=>v.id===route.id);
- const filtered=useMemo(()=>{let list=videos;if(route.page==='saved')list=saved.map(id=>videos.find(v=>v.id===id)).filter(Boolean);if(route.page==='history')list=history.map(id=>videos.find(v=>v.id===id)).filter(Boolean);if(route.page==='subscriptions')list=videos.filter(v=>subscriptions.includes(v.creatorId));if(route.page==='shorts')list=videos.filter(v=>v.durationSec&&v.durationSec<=60);if(category!=='All'&&['home','search'].includes(route.page))list=list.filter(v=>v.category===category);if(query&&route.page==='search'){const q=query.toLowerCase();list=list.filter(v=>`${v.title} ${v.author} ${v.category}`.toLowerCase().includes(q))}return list},[videos,route.page,saved,history,subscriptions,category,query]);
- const doSearch=e=>{e.preventDefault();setQuery(search.trim());setCategory('All');go('search')};
- const nav=[{icon:Home,label:'Home',page:'home'},{icon:Clapperboard,label:'Shorts',page:'shorts'},{icon:UsersRound,label:'Subscriptions',page:'subscriptions'}];
- const you=[{icon:History,label:'History',page:'history'},{icon:Bookmark,label:'Watch later',page:'saved'}];
- return <div className="app"><header className="topbar"><div className="header-left"><button className="icon-button menu-button" onClick={()=>{if(innerWidth<800)setMobileNav(!mobileNav);else setExpanded(!expanded)}} aria-label="Toggle menu"><Menu/></button><Brand onClick={()=>go('home')}/></div><form className="search-form" onSubmit={doSearch}><div className="search-box"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search" aria-label="Search videos"/>{search&&<button type="button" className="clear" onClick={()=>setSearch('')} aria-label="Clear search"><X size={18}/></button>}</div><button className="search-submit" aria-label="Search"><Search size={20}/></button></form><div className="header-actions"><button className="create-button" onClick={()=>user?setModal('upload'):setModal('auth')}><Video size={18}/><span>Create</span></button><button className="icon-button theme-button" onClick={()=>setDark(!dark)} aria-label="Toggle theme">{dark?<Sun/>:<Moon/>}</button>{user?<div className="account-wrap"><button className="avatar-button" onClick={()=>setAccountMenu(!accountMenu)} aria-label="Account menu"><Avatar name={user.name}/></button>{accountMenu&&<div className="account-menu"><strong>{user.name}</strong><button onClick={async()=>{try{await post('auth',{action:'logout'});setUser(null);setAccountMenu(false);notify('Signed out')}catch(e){notify(e.message)}}}><LogOut size={17}/> Sign out</button></div>}</div>:<button className="signin" onClick={()=>setModal('auth')}><UserRound size={19}/> <span>Sign in</span></button>}</div></header>
- <div className="layout"><aside className={`sidebar ${expanded?'':'compact'} ${mobileNav?'mobile-open':''}`}><div className="nav-group">{nav.map(n=><Nav key={n.page} {...n} active={route.page===n.page} onClick={()=>go(n.page)}/>)}</div><div className="nav-group"><div className="nav-heading">You <ChevronRight size={16}/></div>{you.map(n=><Nav key={n.page} {...n} active={route.page===n.page} onClick={()=>go(n.page)}/>)}</div><div className="nav-group explore"><div className="nav-heading">Explore</div>{[[Compass,'Discover','All'],[Music2,'Music','Music'],[Gamepad2,'Gaming','Gaming'],[Trophy,'Sports','Sports'],[Lightbulb,'Learning','Education']].map(([Icon,label,cat])=><button className="nav-item" key={label} onClick={()=>{setCategory(cat);go('home')}}><Icon size={21}/><span>{label}</span></button>)}</div><div className="side-footer">Made for the curious.<br/>© {new Date().getFullYear()} ARINX</div></aside>{mobileNav&&<button className="scrim" aria-label="Close navigation" onClick={()=>setMobileNav(false)}/>}
- <main className="main">{route.page==='watch'? selected?<Watch v={selected} videos={videos} onWatch={watch} user={user} askAuth={()=>setModal('auth')} saved={saved.includes(selected.id)} toggleSaved={()=>toggleSaved(selected.id)} notify={notify} go={go}/>:<div className="empty"><h2>Video not found</h2><p>This video may have been removed or is unavailable.</p><button className="primary" onClick={()=>go('home')}>Back to home</button></div>:<><div className="chips">{categories.map(c=><button key={c} className={category===c?'chip active':'chip'} onClick={()=>{setCategory(c);if(!['home','search'].includes(route.page))go('home')}}>{c}</button>)}</div><div className="feed"><div className="feed-heading"><div><div className="eyebrow"><span className="eyebrow-dot"/> YOUR WORLD, IN MOTION</div><h1>{route.page==='search'?`Results for “${query}”`:route.page==='history'?'Your history':route.page==='saved'?'Watch later':route.page==='subscriptions'?'Subscriptions':route.page==='shorts'?'Shorts':'Find your next favorite.'}</h1><p>{route.page==='home'?'A little inspiration for wherever you are.':route.page==='shorts'?'Big ideas, little videos.':route.page==='subscriptions'?'The latest from creators you follow.':route.page==='history'?'Pick up where you left off.':route.page==='saved'?'The videos you saved for later.':'Explore videos and creators.'}</p></div><span className="feed-count">{filtered.length} VIDEOS</span></div>{filtered.length?<div className="video-grid">{filtered.map(v=><Card key={v.id} v={v} onWatch={watch}/>)}</div>:<div className="empty"><Compass size={34}/><h2>Nothing here yet</h2><p>{route.page==='subscriptions'&&!user?'Sign in to see videos from creators you follow.':'Try another category or explore the home feed.'}</p><button className="primary" onClick={()=>route.page==='subscriptions'&&!user?setModal('auth'):(setCategory('All'),go('home'))}>{route.page==='subscriptions'&&!user?'Sign in':'Explore videos'}</button></div>}</div></>}</main></div>
- {notice&&<div className="toast" role="status">{notice}</div>}{modal==='auth'&&<AuthModal close={()=>setModal('')} onUser={u=>{setUser(u);setModal('');notify(`Welcome, ${u.name}`)}}/>}{modal==='upload'&&<UploadModal close={()=>setModal('')} onUploaded={id=>{setModal('');refresh();notify('Your video is published!');go('watch',id)}}/>}</div>
-}
-function historyPush(url){window.history.pushState({},'',url)}
-function Nav({icon:Icon,label,active,onClick}){return <button className={'nav-item '+(active?'selected':'')} onClick={onClick}><Icon size={21} strokeWidth={active?2.4:1.8}/><span>{label}</span></button>}
-function Watch({v,videos,onWatch,user,askAuth,saved,toggleSaved,notify,go}){
- const [comments,setComments]=useState([]),[comment,setComment]=useState(''),[likes,setLikes]=useState({count:0,liked:false}),[subscribed,setSubscribed]=useState(false),[busy,setBusy]=useState(false);
- const load=()=>{api(`videos/${v.id}/comments`).then(d=>setComments(d.comments)).catch(()=>{});api(`videos/${v.id}/likes`).then(setLikes).catch(()=>{});if(v.creatorId)api(`subscriptions/${v.creatorId}`).then(d=>setSubscribed(d.subscribed)).catch(()=>{})};
- useEffect(()=>{setComments([]);setLikes({count:0,liked:false});setSubscribed(false);setComment('');load()},[v.id,user]);
- const act=async(fn)=>{if(!user){askAuth();return}try{await fn()}catch(e){notify(e.message)}};
- const share=async()=>{try{await navigator.clipboard.writeText(location.href);notify('Link copied to clipboard')}catch{notify('Copy the link from your address bar')}};
- return <div className="watch-layout"><div className="watch-main"><button className="back-link" onClick={()=>go('home')}><ArrowLeft size={16}/> Back to discover</button><div className="player"><video controls autoPlay playsInline src={v.url} poster={v.thumb||undefined}>Your browser does not support video playback.</video></div><h1 className="watch-title">{v.title}</h1><div className="watch-actions"><div className="creator"><Avatar name={v.author}/><div><strong>{v.author}</strong><small>{v.creatorId?'ARINX creator':'Wikimedia Commons'}</small></div>{v.creatorId&&user?.id!==v.creatorId&&<button className={'subscribe '+(subscribed?'subscribed':'')} onClick={()=>act(async()=>{const d=await post(`subscriptions/${v.creatorId}`,{});setSubscribed(d.subscribed)})}>{subscribed?'Subscribed':'Subscribe'}</button>}</div><div className="action-buttons"><button className={likes.liked?'action active-action':'action'} onClick={()=>act(async()=>{await post(`videos/${v.id}/likes`,{});load()})}><ThumbsUp size={17}/> {likes.count||'Like'}</button><button className="action" onClick={share}><Share2 size={17}/> Share</button><button className={'action '+(saved?'active-action':'')} onClick={()=>{toggleSaved();notify(saved?'Removed from Watch later':'Saved to Watch later')}}>{saved?<Check size={17}/>:<Bookmark size={17}/>} {saved?'Saved':'Save'}</button></div></div><div className="description"><strong>{v.category} {v.createdAt&&' · '+new Date(v.createdAt).toLocaleDateString()}</strong><p>{v.description||'Discover more on ARINX.'}</p>{v.page&&<p>Source: <a href={v.page} target="_blank" rel="noreferrer">Wikimedia Commons <ExternalLink size={13}/></a> · {v.license} · {v.author}</p>}</div><section className="comments"><h2>{comments.length} Comments</h2><div className="comment-form"><Avatar name={user?.name||'A'}/><form onSubmit={e=>{e.preventDefault();act(async()=>{setBusy(true);try{await post(`videos/${v.id}/comments`,{body:comment});setComment('');load()}finally{setBusy(false)}})}}><input value={comment} onChange={e=>setComment(e.target.value)} placeholder="Add a comment..." maxLength={2000} aria-label="Add a comment"/><div><button className="primary" disabled={!comment.trim()||busy}>Comment</button></div></form></div>{comments.map(c=><div className="comment" key={c.id}><Avatar name={c.name}/><div><strong>{c.name}</strong><small>{new Date(c.createdAt).toLocaleDateString()}</small><p>{c.body}</p></div></div>)}</section></div><aside className="recommendations"><div className="rec-heading"><span>Up next</span><span>MORE TO EXPLORE</span></div>{videos.filter(x=>x.id!==v.id).slice(0,12).map(item=><button className="rec" key={item.id} onClick={()=>onWatch(item)}><div className="rec-thumb">{item.thumb?<img src={item.thumb} loading="lazy" alt=""/>:<Play/>}{item.durationSec>0&&<span className="duration">{duration(item.durationSec)}</span>}</div><div><strong>{item.title}</strong><small>{item.author}<br/>{item.category}</small></div></button>)}</aside></div>
-}
-function Modal({close,title,subtitle,children}){return <div className="modal-backdrop" onClick={close}><div className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={e=>e.stopPropagation()}><button className="icon-button modal-close" onClick={close} aria-label="Close"><X/></button><span className="modal-icon"><Play size={18} fill="currentColor"/></span><h2>{title}</h2><p>{subtitle}</p>{children}</div></div>}
-function AuthModal({close,onUser}){const [register,setRegister]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false);return <Modal close={close} title={register?'Join the conversation':'Welcome back'} subtitle={register?'Create an account to share, save and connect.':'Sign in to get more from ARINX.'}><form className="modal-form" onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');const data=new FormData(e.currentTarget);try{const d=await post('auth',{action:register?'register':'login',name:data.get('name'),email:data.get('email'),password:data.get('password')});onUser(d.user)}catch(err){setError(err.message)}finally{setBusy(false)}}}>{register&&<label>Display name<input name="name" required minLength="2" maxLength="60" placeholder="Your name"/></label>}<label>Email<input name="email" type="email" required placeholder="you@example.com"/></label><label>Password<input name="password" type="password" minLength="8" maxLength="200" required placeholder="At least 8 characters"/></label>{error&&<div className="form-error">{error}</div>}<button className="primary wide" disabled={busy}>{busy?'Please wait...':register?'Create account':'Sign in'}</button></form><div className="modal-switch">{register?'Already have an account?':'New to ARINX?'} <button onClick={()=>{setRegister(!register);setError('')}}>{register?'Sign in':'Create account'}</button></div></Modal>}
-function UploadModal({close,onUploaded}){const [error,setError]=useState(''),[busy,setBusy]=useState(false);return <Modal close={close} title="Share your story" subtitle="Upload a video and put something good into the world."><form className="modal-form" onSubmit={async e=>{e.preventDefault();const form=new FormData(e.currentTarget),file=form.get('file');if(file.size>50*1024*1024){setError('Videos must be 50 MB or smaller.');return}setBusy(true);setError('');try{const d=await api('upload',{method:'POST',body:form});onUploaded(d.id)}catch(err){setError(err.message)}finally{setBusy(false)}}}><label>Video file<input name="file" type="file" accept="video/mp4,video/webm,video/quicktime" required/><small>MP4, WebM or MOV · up to 50 MB</small></label><label>Title<input name="title" required maxLength="120" placeholder="Give your video a title"/></label><label>Description<textarea name="description" maxLength="5000" placeholder="Tell viewers about your video"/></label><label>Category<select name="category">{categories.slice(1).map(c=><option key={c}>{c}</option>)}</select></label><p className="upload-note">Only upload videos you have the rights to share. Videos are public.</p>{error&&<div className="form-error">{error}</div>}<button className="primary wide" disabled={busy}>{busy?'Uploading...':'Publish video'}</button></form></Modal>}
+const readRoute = () => {
+  const params = new URLSearchParams(location.search);
+  const id = params.get('v');
+  if (id) return {page: 'watch', id};
+  const page = params.get('page');
+  if (['shorts', 'library', 'search'].includes(page)) return {page, q: params.get('q') || '', tab: params.get('tab') || ''};
+  return {page: 'home'};
+};
+const toQuery = route => {
+  if (!route) return '';
+  const params = new URLSearchParams();
+  if (route.page === 'watch' && route.id) params.set('v', route.id);
+  else if (route.page && route.page !== 'home') params.set('page', route.page);
+  if (route.q) params.set('q', route.q);
+  if (route.tab) params.set('tab', route.tab);
+  return params.toString();
+};
 
-createRoot(document.getElementById('root')).render(<App/>);
+function App() {
+  const [route, setRoute] = useState(readRoute);
+  const [user, setUser] = useState(undefined);
+  const [managed, setManaged] = useState([]);
+  const [health, setHealth] = useState(null);
+  const [theme, setTheme] = useState(() => read('arinx.theme', 'dark'));
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [searchDraft, setSearchDraft] = useState(() => readRoute().q || '');
+  const [toasts, setToasts] = useState([]);
+  const [progress, setProgress] = useState(() => read('arinx.progress', {}));
+  const [saved, setSaved] = useState(() => read('arinx.saved', []));
+  const [historyList, setHistoryList] = useState(() => read('arinx.history', []));
+  const [likedList, setLikedList] = useState(() => read('arinx.liked', []));
+  const [cinema, setCinema] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const searchRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const videos = useMemo(() => mergeVideos(managed, catalog), [managed]);
+  const maxMB = health?.uploadLimitMB || 16;
+  const storage = health?.storage === 'r2' ? 'R2' : 'D1';
+
+  const toastSeqRef = useRef(0);
+  const notify = useCallback((message, kind = 'ok') => {
+    const id = ++toastSeqRef.current;
+    setToasts(current => [...current.slice(-3), {id, message, kind}]);
+    setTimeout(() => setToasts(current => current.filter(toast => toast.id !== id)), 4200);
+  }, []);
+
+  const loadVideos = useCallback(async () => {
+    try { const data = await api('videos'); setManaged(data.videos || []); } catch { /* keep catalog */ }
+    return [];
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    api('auth').then(data => alive && setUser(data.user)).catch(() => alive && setUser(null));
+    api('health').then(data => alive && setHealth(data)).catch(() => {});
+    api('videos').then(data => alive && setManaged(data.videos || [])).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    write('arinx.theme', theme);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#040914' : '#eef4ff');
+  }, [theme]);
+
+  useEffect(() => {
+    if (route.page === 'search') setSearchDraft(route.q || '');
+  }, [route.page, route.q]);
+
+  useEffect(() => {
+    const onPop = () => setRoute(readRoute());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  useEffect(() => {
+    if (route.page !== 'watch' || !route.id) return;
+    setHistoryList(current => {
+      const next = [{id: route.id, at: Date.now()}, ...current.filter(item => item.id !== route.id)].slice(0, 80);
+      write('arinx.history', next);
+      return next;
+    });
+  }, [route.page, route.id]);
+
+  useEffect(() => {
+    const onKey = event => {
+      const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault(); setPaletteOpen(value => !value);
+      } else if (event.key === '/' && !typing) {
+        event.preventDefault(); searchRef.current?.focus();
+      } else if (event.key === 'Escape') {
+        setCinema(false); setMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = event => { if (!menuRef.current?.contains(event.target)) setMenuOpen(false); };
+    document.addEventListener('pointerdown', onClick);
+    return () => document.removeEventListener('pointerdown', onClick);
+  }, [menuOpen]);
+
+  const go = useCallback(next => {
+    if (next?.openAuth) { setAuthOpen(true); return; }
+    const target = !next ? {page: 'home'} : typeof next === 'string' ? {page: next} : next.id && !next.page ? {page: 'watch', id: next.id} : next;
+    setMenuOpen(false);
+    setCinema(false);
+    const qs = toQuery(target);
+    const apply = () => {
+      window.history.pushState({}, '', qs ? `/?${qs}` : location.pathname);
+      setRoute(target);
+      window.scrollTo({top: 0, behavior: 'instant'});
+    };
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (document.startViewTransition && !reduce) document.startViewTransition(apply);
+    else apply();
+  }, []);
+
+  const openVideo = useCallback(video => {
+    go({page: 'watch', id: video.id});
+  }, [go]);
+
+  const saveProgress = useCallback((id, t, d) => {
+    setProgress(current => {
+      const next = {...current, [id]: {t, d, at: Date.now()}};
+      write('arinx.progress', next);
+      return next;
+    });
+  }, []);
+
+  const toggleSave = useCallback(video => {
+    const has = saved.includes(video.id);
+    const next = has ? saved.filter(id => id !== video.id) : [video.id, ...saved];
+    setSaved(next); write('arinx.saved', next);
+    notify(has ? 'Removed from Watch later' : 'Saved to Watch later', 'save');
+  }, [saved, notify]);
+
+  const toggleLikeLocal = useCallback((id, isLiked) => {
+    setLikedList(current => {
+      const next = isLiked ? [id, ...current.filter(item => item !== id)] : current.filter(item => item !== id);
+      write('arinx.liked', next);
+      return next;
+    });
+  }, []);
+
+  const logout = async () => {
+    try { await post('auth', {action: 'logout'}); } catch { /* already out */ }
+    setUser(null); setMenuOpen(false); notify('Signed out of ARINX');
+  };
+
+  const uploaded = async id => {
+    try { const data = await api('videos'); setManaged(data.videos || []); } catch { /* noop */ }
+    go({page: 'watch', id});
+  };
+
+  const submitSearch = event => {
+    event.preventDefault();
+    go({page: 'search', q: searchDraft.trim()});
+  };
+
+  const isAdmin = user && ['admin', 'owner'].includes(user.role);
+  const actions = useMemo(() => {
+    const list = [
+      {id: 'publish', label: 'Publish a video', hint: 'Upload a file or link a source', icon: UploadCloud, run: () => (user ? setUploadOpen(true) : setAuthOpen(true))},
+      {id: 'theme', label: `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`, hint: 'Appearance', icon: theme === 'dark' ? Sun : Moon, run: () => setTheme(value => (value === 'dark' ? 'light' : 'dark'))},
+      {id: 'library', label: 'Open your library', hint: 'History, saved and likes', icon: Bookmark, run: () => go({page: 'library'})}
+    ];
+    if (user) list.push({id: 'signout', label: `Sign out of ${user.name}`, hint: 'Account', icon: LogOut, run: logout});
+    else list.push({id: 'signin', label: 'Sign in or create an account', hint: 'Account', icon: UserRound, run: () => setAuthOpen(true)});
+    if (isAdmin) list.push({id: 'admin', label: 'Open admin console', hint: 'Owner tools', icon: LayoutDashboard, run: () => { location.href = '/admin'; }});
+    return list;
+  }, [user, theme, isAdmin, go]);
+
+  const watchVideo = route.page === 'watch' ? videos.find(video => video.id === route.id) : null;
+  const navItems = [
+    {page: 'home', label: 'Discover', icon: Compass},
+    {page: 'shorts', label: 'Shorts', icon: Clapperboard},
+    {page: 'search', label: 'Search', icon: Search},
+    {page: 'library', label: 'Library', icon: Bookmark}
+  ];
+
+  return (
+    <div className="app">
+      <div className="ambient" aria-hidden="true"><span className="orb orb-a" /><span className="orb orb-b" /><span className="orb orb-c" /><span className="grid-lines" /></div>
+      <aside className="rail">
+        <button className="rail-logo" onClick={() => go({page: 'home'})} aria-label="ARINX home"><Logo word={false} /></button>
+        <nav className="rail-nav" aria-label="Primary">
+          {navItems.map(({page, label, icon: Icon}) => (
+            <button key={page} className={cx('rail-btn', route.page === page && 'active')} onClick={() => go({page})} aria-current={route.page === page ? 'page' : undefined}>
+              <Icon size={20} /><span>{label}</span>
+            </button>
+          ))}
+          <button className="rail-btn" onClick={() => (user ? setUploadOpen(true) : setAuthOpen(true))}><Plus size={20} /><span>Publish</span></button>
+          {isAdmin && <a className="rail-btn" href="/admin"><Shield size={20} /><span>Admin</span></a>}
+        </nav>
+        <div className="rail-bottom">
+          <button className="rail-btn" onClick={() => setPaletteOpen(true)}><Command size={20} /><span>Jump</span></button>
+          <button className="rail-btn" onClick={() => setTheme(value => (value === 'dark' ? 'light' : 'dark'))}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}<span>Theme</span></button>
+          {user ? (
+            <button className="rail-avatar" onClick={() => setMenuOpen(value => !value)} aria-label="Account menu"><Avatar name={user.name} size={38} /><span className="presence" /></button>
+          ) : (
+            <button className="rail-btn" onClick={() => setAuthOpen(true)}><UserRound size={20} /><span>Sign in</span></button>
+          )}
+        </div>
+      </aside>
+
+      <div className="shell">
+        <header className="topbar">
+          <button className="topbar-brand" onClick={() => go({page: 'home'})} aria-label="ARINX home"><Logo /></button>
+          <form className="global-search" onSubmit={submitSearch} role="search">
+            <Search size={18} />
+            <input ref={searchRef} value={searchDraft} onChange={event => setSearchDraft(event.target.value)} placeholder="Search films, creators, frequencies…" aria-label="Search ARINX" />
+            <button type="button" className="key-btn" onClick={() => setPaletteOpen(true)} aria-label="Open command palette"><Command size={13} />K</button>
+          </form>
+          <div className="topbar-actions">
+            <button className="icon-btn ghost" onClick={() => setPaletteOpen(true)} aria-label="Command palette"><Command size={18} /></button>
+            <button className="btn btn-primary publish-btn" onClick={() => (user ? setUploadOpen(true) : setAuthOpen(true))}><UploadCloud size={16} /><span>Publish</span></button>
+            {user ? (
+              <div className="user-menu" ref={menuRef}>
+                <button className="avatar-btn" onClick={() => setMenuOpen(value => !value)} aria-label="Account menu"><Avatar name={user.name} size={36} /></button>
+                {menuOpen && (
+                  <div className="user-pop glass">
+                    <div className="user-pop-head"><Avatar name={user.name} size={40} /><div><b>{user.name}</b><small>{user.role} account</small></div></div>
+                    {isAdmin && <a className="user-pop-item" href="/admin"><LayoutDashboard size={16} />Admin console</a>}
+                    <button className="user-pop-item" onClick={() => { setMenuOpen(false); setUploadOpen(true); }}><UploadCloud size={16} />Publish a video</button>
+                    <button className="user-pop-item" onClick={() => { setMenuOpen(false); go({page: 'library'}); }}><Bookmark size={16} />Your library</button>
+                    <button className="user-pop-item danger" onClick={logout}><LogOut size={16} />Sign out</button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button className="btn btn-glass signin-btn" onClick={() => setAuthOpen(true)}><UserRound size={16} /><span>Sign in</span></button>
+            )}
+          </div>
+        </header>
+
+        <main className="stage">
+          {route.page === 'home' && <Home videos={videos} progress={progress} saved={saved} onOpen={openVideo} onNavigate={go} onUpload={() => (user ? setUploadOpen(true) : setAuthOpen(true))} user={user} maxMB={maxMB} onToggleSave={toggleSave} notify={notify} />}
+          {route.page === 'watch' && <Watch video={watchVideo} videos={videos} user={user} liked={likedList.includes(route.id)} saved={saved.includes(route.id)} progress={progress} onProgress={saveProgress} onToggleSave={toggleSave} onToggleLike={toggleLikeLocal} onNavigate={go} onAuth={() => setAuthOpen(true)} notify={notify} cinema={cinema} setCinema={setCinema} />}
+          {route.page === 'shorts' && <Shorts videos={videos} saved={saved} onOpen={openVideo} onToggleSave={toggleSave} onLike={video => { if (!user) setAuthOpen(true); else notify('Open the video to leave a like'); }} />}
+          {route.page === 'library' && <Library videos={videos} user={user} progress={progress} saved={saved} history={historyList} liked={likedList} onOpen={openVideo} onUpload={() => (user ? setUploadOpen(true) : setAuthOpen(true))} onNeedAuth={() => setAuthOpen(true)} initialTab={route.tab} onNavigate={go} />}
+          {route.page === 'search' && <SearchPage videos={videos} query={route.q || ''} onQuery={q => go({page: 'search', q})} onOpen={openVideo} onNavigate={go} onUpload={() => (user ? setUploadOpen(true) : setAuthOpen(true))} maxMB={maxMB} />}
+        </main>
+
+        <footer className="site-foot">
+          <div className="foot-brand"><Logo /><span>Your world, in motion.</span></div>
+          <div className="foot-meta">
+            <span className="foot-dot" />{storage} storage · {maxMB} MB uploads · edge delivery
+          </div>
+          <div className="foot-links">
+            <a href="/admin">Admin</a>
+            <a href="/api/health" target="_blank" rel="noreferrer">Status</a>
+            <span>© {new Date().getFullYear()} ARINX</span>
+          </div>
+        </footer>
+      </div>
+
+      <nav className="bottom-nav glass" aria-label="Mobile">
+        <button className={cx(route.page === 'home' && 'active')} onClick={() => go({page: 'home'})}><Compass size={20} /><span>Discover</span></button>
+        <button className={cx(route.page === 'shorts' && 'active')} onClick={() => go({page: 'shorts'})}><Clapperboard size={20} /><span>Shorts</span></button>
+        <button className="compose" onClick={() => (user ? setUploadOpen(true) : setAuthOpen(true))} aria-label="Publish"><Plus size={22} /></button>
+        <button className={cx(route.page === 'library' && 'active')} onClick={() => go({page: 'library'})}><Bookmark size={20} /><span>Library</span></button>
+        <button className={cx(route.page === 'search' && 'active')} onClick={() => go({page: 'search'})}><Search size={20} /><span>Search</span></button>
+      </nav>
+
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} onDone={setUser} notify={notify} />
+      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} user={user} maxMB={maxMB} onUploaded={uploaded} onNeedAuth={() => { setUploadOpen(false); setAuthOpen(true); }} notify={notify} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} videos={videos} actions={actions} onNavigate={go} onOpenVideo={openVideo} />
+      <Toasts items={toasts} onDismiss={id => setToasts(current => current.filter(toast => toast.id !== id))} />
+    </div>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
