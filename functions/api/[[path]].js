@@ -498,7 +498,6 @@ export async function onRequest({request:req, env}) {
     return fail('Not found.', 404);
   } catch (error) {
     console.error('API error', error);
-    if (url.searchParams.get('debug') === 'arinx-qa-2026') return fail(`${error?.message || error} :: ${error?.stack || ''}`, 500);
     return fail('Something went wrong. Please try again.', 500);
   }
 }
